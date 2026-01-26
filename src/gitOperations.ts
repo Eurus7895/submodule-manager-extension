@@ -179,15 +179,21 @@ export class GitOperations {
         status = 'detached';
       }
 
-      // Check for changes
+      // Check for changes inside the submodule (uncommitted files)
       const statusOutput = await this.execGit(['status', '--porcelain'], fullPath);
-      hasChanges = statusOutput.length > 0;
+      // Trim whitespace and check if there are actual changes
+      hasChanges = statusOutput.trim().length > 0;
 
+      // Determine final status
+      // - 'modified': has uncommitted changes inside the submodule
+      // - 'detached': checked out to a specific commit (not on a branch), but clean
+      // - 'clean': on a branch with no uncommitted changes
       if (hasChanges) {
         status = 'modified';
       } else if (status !== 'detached') {
         status = 'clean';
       }
+      // If detached and no changes, keep status as 'detached'
 
       // Get ahead/behind counts
       if (currentBranch && currentBranch !== 'HEAD') {

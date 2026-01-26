@@ -1320,11 +1320,11 @@ export class SubmoduleManagerPanel {
           const statusEl = card.querySelector('.card-status');
           if (statusEl) {
             statusEl.className = 'card-status status-' + s.status;
-            statusEl.innerHTML = getStatusIcon(s.status) + ' ' + s.status;
+            statusEl.innerHTML = getStatusIcon(s.status) + ' ' + s.status.toUpperCase();
           }
 
           const branchEl = card.querySelector('.info-value.branch');
-          if (branchEl) branchEl.textContent = s.currentBranch || 'detached';
+          if (branchEl) branchEl.textContent = s.currentBranch || '(detached)';
 
           const commitEl = card.querySelector('.info-value.commit');
           if (commitEl) commitEl.textContent = s.currentCommit || 'N/A';
@@ -1368,6 +1368,11 @@ export class SubmoduleManagerPanel {
   private _renderSubmoduleCard(submodule: SubmoduleInfo, index: number): string {
     const statusClass = `status-${submodule.status}`;
     const statusIcon = this._getStatusIcon(submodule.status);
+    const statusTooltip = this._getStatusTooltip(submodule.status);
+    const branchDisplay = submodule.currentBranch || '(detached)';
+    const branchTooltip = submodule.currentBranch
+      ? `Currently on branch: ${submodule.currentBranch}`
+      : `Detached HEAD: Not on any branch, checked out to commit ${submodule.currentCommit}. This is normal for submodules synced to a specific commit.`;
 
     return `
       <div class="submodule-card" data-name="${submodule.name}" data-path="${submodule.path}" style="animation-delay: ${index * 0.05}s">
@@ -1377,13 +1382,13 @@ export class SubmoduleManagerPanel {
             <span class="card-name">${submodule.name}</span>
             <span class="rebase-indicator" style="display: none; background: rgba(255, 165, 0, 0.2); color: var(--warning); padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-left: 8px;">⏳ REBASING</span>
           </div>
-          <span class="card-status ${statusClass}">${statusIcon} ${submodule.status}</span>
+          <span class="card-status ${statusClass}" title="${statusTooltip}">${statusIcon} ${submodule.status.toUpperCase()}</span>
         </div>
         <div class="card-body">
           <div class="card-info">
             <div class="info-item">
               <span class="info-label">Branch</span>
-              <span class="info-value branch">${submodule.currentBranch || 'detached'}</span>
+              <span class="info-value branch" title="${branchTooltip}">${branchDisplay}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Commit</span>
@@ -1427,6 +1432,18 @@ export class SubmoduleManagerPanel {
       'unknown': '?'
     };
     return icons[status] || '?';
+  }
+
+  private _getStatusTooltip(status: string): string {
+    const tooltips: Record<string, string> = {
+      'clean': 'Clean: On a branch with no uncommitted changes',
+      'modified': 'Modified: Has uncommitted changes inside the submodule',
+      'uninitialized': 'Uninitialized: Submodule has not been cloned yet. Run Init All to initialize.',
+      'detached': 'Detached HEAD: Checked out to a specific commit, not on any branch. This is normal when synced to the parent repo\'s recorded commit.',
+      'conflict': 'Conflict: Merge conflict detected',
+      'unknown': 'Unknown: Could not determine status'
+    };
+    return tooltips[status] || 'Unknown status';
   }
 
   public dispose() {
