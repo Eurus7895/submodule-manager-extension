@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="24" fill="url(#bg)"/>
+  <g fill="white">
+    <!-- Main branch -->
+    <circle cx="64" cy="28" r="10"/>
+    <rect x="60" y="38" width="8" height="52" rx="4"/>
+
+    <!-- Left submodule -->
+    <circle cx="34" cy="70" r="8"/>
+    <path d="M42 70 L56 50" stroke="white" stroke-width="6" stroke-linecap="round"/>
+    <rect x="30" y="78" width="8" height="22" rx="4"/>
+    <circle cx="34" cy="104" r="6"/>
+
+    <!-- Right submodule -->
+    <circle cx="94" cy="70" r="8"/>
+    <path d="M86 70 L72 50" stroke="white" stroke-width="6" stroke-linecap="round"/>
+    <rect x="90" y="78" width="8" height="22" rx="4"/>
+    <circle cx="94" cy="104" r="6"/>
+
+    <!-- Center node -->
+    <circle cx="64" cy="100" r="8"/>
+  </g>
+</svg>
