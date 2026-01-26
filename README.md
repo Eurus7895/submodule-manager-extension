@@ -1,0 +1,1 @@
+# submodule-manager-extension
