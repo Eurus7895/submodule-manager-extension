@@ -2,7 +2,6 @@
  * Git operations module for submodule management
  */
 
-import * as vscode from 'vscode';
 import * as path from 'path';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
@@ -479,13 +478,19 @@ export class GitOperations {
   }
 
   /**
-   * Sync all submodules to their configured branches
+   * Sync submodules to their configured branches
+   * @param submodulePaths Optional list of submodule paths to sync. If not provided, syncs all.
    */
-  async syncAllSubmodules(): Promise<Map<string, CommandResult>> {
+  async syncAllSubmodules(submodulePaths?: string[]): Promise<Map<string, CommandResult>> {
     const results = new Map<string, CommandResult>();
     const submodules = await this.getSubmodules();
 
     for (const submodule of submodules) {
+      // If specific paths provided, only sync those
+      if (submodulePaths && submodulePaths.length > 0 && !submodulePaths.includes(submodule.path)) {
+        continue;
+      }
+
       if (submodule.branch) {
         const result = await this.syncSubmodule(submodule.path, submodule.branch);
         results.set(submodule.path, result);
@@ -580,5 +585,111 @@ export class GitOperations {
     }
 
     return null;
+  }
+
+  /**
+   * Checkout a specific commit in a submodule
+   */
+  async checkoutCommit(submodulePath: string, commit: string): Promise<CommandResult> {
+    const fullPath = path.join(this.workspaceRoot, submodulePath);
+
+    try {
+      await this.execGit(['fetch', '--all'], fullPath);
+      await this.execGit(['checkout', commit], fullPath);
+      return { success: true, message: `Checked out commit '${commit.substring(0, 8)}'` };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { success: false, message: `Failed to checkout commit: ${err.message}` };
+    }
+  }
+
+  /**
+   * Get the commit hash recorded in the parent repository for a submodule
+   * This is the commit the parent repo expects the submodule to be at
+   */
+  async getRecordedCommit(submodulePath: string): Promise<string> {
+    try {
+      // Use ls-tree to get the recorded commit for the submodule
+      const output = await this.execGit(['ls-tree', 'HEAD', submodulePath]);
+      const match = output.match(/commit\s+([a-f0-9]+)/);
+      if (match) {
+        return match[1];
+      }
+      return '';
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * Get the current HEAD commit of a submodule
+   */
+  async getCurrentCommit(submodulePath: string): Promise<string> {
+    const fullPath = path.join(this.workspaceRoot, submodulePath);
+
+    try {
+      return await this.execGit(['rev-parse', 'HEAD'], fullPath);
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * Update a submodule to the commit recorded in the parent repository
+   */
+  async updateToRecordedCommit(submodulePath: string): Promise<CommandResult> {
+    try {
+      // This updates the submodule to the commit recorded in the parent's index
+      // WITHOUT the --remote flag, it uses the recorded commit
+      await this.execGit(['submodule', 'update', '--init', '--', submodulePath]);
+      return { success: true, message: `Updated '${submodulePath}' to recorded commit` };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { success: false, message: `Failed to update: ${err.message}` };
+    }
+  }
+
+  /**
+   * Update submodules to their recorded commits (not remote)
+   * This is different from updateSubmodules which fetches the latest from remote
+   */
+  async updateSubmodulesToRecorded(): Promise<CommandResult> {
+    try {
+      // Without --remote, this updates to the recorded commits
+      await this.execGit(['submodule', 'update', '--init', '--recursive']);
+      return { success: true, message: 'Submodules updated to recorded commits' };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { success: false, message: `Failed to update submodules: ${err.message}` };
+    }
+  }
+
+  /**
+   * Record a specific commit for a submodule in the parent repository
+   * This stages the submodule pointer change
+   */
+  async recordSubmoduleCommit(submodulePath: string, commit?: string): Promise<CommandResult> {
+    const fullPath = path.join(this.workspaceRoot, submodulePath);
+
+    try {
+      // If a specific commit is provided, checkout that commit first
+      if (commit) {
+        await this.execGit(['fetch', '--all'], fullPath);
+        await this.execGit(['checkout', commit], fullPath);
+      }
+
+      // Stage the submodule change in the parent repo
+      await this.execGit(['add', submodulePath]);
+      const currentCommit = await this.getCurrentCommit(submodulePath);
+
+      return {
+        success: true,
+        message: `Recorded commit '${currentCommit.substring(0, 8)}' for '${submodulePath}'`,
+        data: { commit: currentCommit }
+      };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { success: false, message: `Failed to record commit: ${err.message}` };
+    }
   }
 }

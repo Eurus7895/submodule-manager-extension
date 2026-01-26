@@ -3,7 +3,6 @@
  */
 
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { GitOperations } from './gitOperations';
 import { SubmoduleInfo, SubmoduleStatus } from './types';
 

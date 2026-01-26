@@ -70,13 +70,22 @@ export class SubmoduleManagerPanel {
     );
   }
 
-  public async refresh() {
-    await this._update();
+  public async refresh(fullRefresh: boolean = false) {
+    await this._update(fullRefresh);
   }
 
-  private async _update() {
+  private async _update(fullRefresh: boolean = true) {
     const submodules = await this._gitOps.getSubmodules();
-    this._panel.webview.html = this._getHtmlForWebview(submodules);
+
+    if (fullRefresh) {
+      this._panel.webview.html = this._getHtmlForWebview(submodules);
+    } else {
+      // Send data update instead of regenerating HTML
+      this._panel.webview.postMessage({
+        type: 'updateSubmodules',
+        payload: { submodules }
+      });
+    }
   }
 
   private async _handleMessage(message: { type: string; payload?: unknown }) {
@@ -134,6 +143,32 @@ export class SubmoduleManagerPanel {
 
       case 'getBranches':
         await this._sendBranches(message.payload as { submodule: string });
+        break;
+
+      case 'checkoutCommit':
+        await this._checkoutCommit(message.payload as {
+          submodule: string;
+          commit: string;
+        });
+        break;
+
+      case 'getCommits':
+        await this._sendCommits(message.payload as { submodule: string });
+        break;
+
+      case 'getRecordedCommit':
+        await this._sendRecordedCommit(message.payload as { submodule: string });
+        break;
+
+      case 'updateToRecorded':
+        await this._updateToRecorded(message.payload as { submodule: string });
+        break;
+
+      case 'setRebaseStatus':
+        await this._setRebaseStatus(message.payload as {
+          submodule: string;
+          isRebasing: boolean;
+        });
         break;
     }
   }
@@ -208,7 +243,9 @@ export class SubmoduleManagerPanel {
   }
 
   private async _syncVersions(payload: { submodules: string[] }) {
-    const results = await this._gitOps.syncAllSubmodules();
+    // Sync only the selected submodules, or all if none selected
+    const submodulesToSync = payload.submodules.length > 0 ? payload.submodules : undefined;
+    const results = await this._gitOps.syncAllSubmodules(submodulesToSync);
     let successCount = 0;
 
     results.forEach((result) => {
@@ -243,6 +280,48 @@ export class SubmoduleManagerPanel {
     this._panel.webview.postMessage({
       type: 'branches',
       payload: { submodule: payload.submodule, branches }
+    });
+  }
+
+  private async _checkoutCommit(payload: { submodule: string; commit: string }) {
+    const result = await this._gitOps.checkoutCommit(payload.submodule, payload.commit);
+    this._showResult(result.success, result.message);
+    await this.refresh();
+  }
+
+  private async _sendCommits(payload: { submodule: string }) {
+    const commits = await this._gitOps.getRecentCommits(payload.submodule, 20);
+    this._panel.webview.postMessage({
+      type: 'commits',
+      payload: { submodule: payload.submodule, commits }
+    });
+  }
+
+  private async _sendRecordedCommit(payload: { submodule: string }) {
+    const recordedCommit = await this._gitOps.getRecordedCommit(payload.submodule);
+    const currentCommit = await this._gitOps.getCurrentCommit(payload.submodule);
+    this._panel.webview.postMessage({
+      type: 'recordedCommit',
+      payload: {
+        submodule: payload.submodule,
+        recordedCommit,
+        currentCommit,
+        isMatching: recordedCommit === currentCommit
+      }
+    });
+  }
+
+  private async _updateToRecorded(payload: { submodule: string }) {
+    const result = await this._gitOps.updateToRecordedCommit(payload.submodule);
+    this._showResult(result.success, result.message);
+    await this.refresh();
+  }
+
+  private async _setRebaseStatus(data: { submodule: string; isRebasing: boolean }) {
+    // Store rebase status in extension context
+    this._panel.webview.postMessage({
+      type: 'rebaseStatusUpdated',
+      payload: { submodule: data.submodule, isRebasing: data.isRebasing }
     });
   }
 
@@ -739,6 +818,52 @@ export class SubmoduleManagerPanel {
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+
+    .recorded-commit-status {
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .recorded-commit-status.success {
+      background: rgba(40, 167, 69, 0.1);
+      border: 1px solid var(--success);
+    }
+
+    .recorded-commit-status.warning {
+      background: rgba(255, 193, 7, 0.1);
+      border: 1px solid var(--warning);
+    }
+
+    .recorded-commit-status code {
+      background: var(--bg-tertiary);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--vscode-editor-font-family);
+    }
+
+    .mismatch-warning {
+      color: var(--warning);
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .rebase-indicator {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .card-actions .rebase-btn {
+      background: rgba(255, 165, 0, 0.1);
+      border: 1px solid var(--warning);
+    }
   </style>
 </head>
 <body>
@@ -858,9 +983,54 @@ export class SubmoduleManagerPanel {
     </div>
   </div>
 
+  <!-- Checkout Commit Modal -->
+  <div class="modal-overlay" id="commitModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Checkout Specific Commit</span>
+        <button class="modal-close" onclick="closeModal('commitModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="recordedCommitInfo" class="form-group">
+          <!-- Will be populated dynamically -->
+        </div>
+        <div class="form-group">
+          <label class="form-label">Enter Commit Hash</label>
+          <input type="text" class="form-input" id="commitInput" placeholder="e.g., abc123def or full hash">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Or Select Recent Commit</label>
+          <select class="form-select" id="commitSelect">
+            <option value="">Loading commits...</option>
+          </select>
+        </div>
+        <input type="hidden" id="commitSubmodule">
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('commitModal')">Cancel</button>
+        <button class="btn" onclick="updateToRecorded(document.getElementById('commitSubmodule').value); closeModal('commitModal');">Use Recorded</button>
+        <button class="btn btn-primary" onclick="checkoutCommit()">Checkout</button>
+      </div>
+    </div>
+  </div>
+
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    let selectedSubmodules = new Set();
+
+    // Restore state from previous session
+    const previousState = vscode.getState() || {};
+    let selectedSubmodules = new Set(previousState.selectedSubmodules || []);
+    let rebasingSubmodules = new Set(previousState.rebasingSubmodules || []);
+    let submoduleData = previousState.submoduleData || ${JSON.stringify(submodules)};
+
+    // Save state helper
+    function saveState() {
+      vscode.setState({
+        selectedSubmodules: Array.from(selectedSubmodules),
+        rebasingSubmodules: Array.from(rebasingSubmodules),
+        submoduleData
+      });
+    }
 
     function postMessage(type, payload) {
       vscode.postMessage({ type, payload });
@@ -896,6 +1066,7 @@ export class SubmoduleManagerPanel {
       } else {
         selectedSubmodules.add(path);
       }
+      saveState();
       updateSelectionUI();
     }
 
@@ -905,6 +1076,7 @@ export class SubmoduleManagerPanel {
         card.querySelector('.card-checkbox').checked = true;
         card.classList.add('selected');
       });
+      saveState();
       updateSelectionUI();
     }
 
@@ -914,6 +1086,7 @@ export class SubmoduleManagerPanel {
         card.querySelector('.card-checkbox').checked = false;
         card.classList.remove('selected');
       });
+      saveState();
       updateSelectionUI();
     }
 
@@ -930,8 +1103,10 @@ export class SubmoduleManagerPanel {
 
       document.querySelectorAll('.submodule-card').forEach(card => {
         const checkbox = card.querySelector('.card-checkbox');
-        checkbox.checked = selectedSubmodules.has(card.dataset.path);
-        card.classList.toggle('selected', selectedSubmodules.has(card.dataset.path));
+        if (checkbox) {
+          checkbox.checked = selectedSubmodules.has(card.dataset.path);
+          card.classList.toggle('selected', selectedSubmodules.has(card.dataset.path));
+        }
       });
     }
 
@@ -990,6 +1165,61 @@ export class SubmoduleManagerPanel {
       closeModal('checkoutModal');
     }
 
+    // New: Checkout specific commit modal
+    function openCommitModal(submodule) {
+      document.getElementById('commitSubmodule').value = submodule;
+      document.getElementById('commitSelect').innerHTML = '<option value="">Loading commits...</option>';
+      document.getElementById('commitInput').value = '';
+      document.getElementById('commitModal').classList.add('active');
+      postMessage('getCommits', { submodule });
+      postMessage('getRecordedCommit', { submodule });
+    }
+
+    function checkoutCommit() {
+      const submodule = document.getElementById('commitSubmodule').value;
+      const commitInput = document.getElementById('commitInput').value.trim();
+      const commitSelect = document.getElementById('commitSelect').value;
+      const commit = commitInput || commitSelect;
+
+      if (!commit) return;
+
+      postMessage('checkoutCommit', { submodule, commit });
+      closeModal('commitModal');
+    }
+
+    function updateToRecorded(submodule) {
+      postMessage('updateToRecorded', { submodule });
+    }
+
+    // Rebase workflow functions
+    function toggleRebaseStatus(submodule) {
+      const isCurrentlyRebasing = rebasingSubmodules.has(submodule);
+      if (isCurrentlyRebasing) {
+        rebasingSubmodules.delete(submodule);
+      } else {
+        rebasingSubmodules.add(submodule);
+      }
+      saveState();
+      postMessage('setRebaseStatus', { submodule, isRebasing: !isCurrentlyRebasing });
+      updateRebaseUI();
+    }
+
+    function updateRebaseUI() {
+      document.querySelectorAll('.submodule-card').forEach(card => {
+        const path = card.dataset.path;
+        const rebaseIndicator = card.querySelector('.rebase-indicator');
+        const rebaseBtn = card.querySelector('.rebase-btn');
+
+        if (rebasingSubmodules.has(path)) {
+          if (rebaseIndicator) rebaseIndicator.style.display = 'inline-flex';
+          if (rebaseBtn) rebaseBtn.textContent = '✓ Done Rebasing';
+        } else {
+          if (rebaseIndicator) rebaseIndicator.style.display = 'none';
+          if (rebaseBtn) rebaseBtn.textContent = '⏳ Mark Rebasing';
+        }
+      });
+    }
+
     function pullChanges(submodule) {
       postMessage('pullChanges', { submodule });
     }
@@ -1020,14 +1250,109 @@ export class SubmoduleManagerPanel {
 
       switch (message.type) {
         case 'branches':
-          const select = document.getElementById('branchSelect');
+          const branchSelect = document.getElementById('branchSelect');
           const branches = message.payload.branches;
-          select.innerHTML = branches.map(b =>
+          branchSelect.innerHTML = branches.map(b =>
             \`<option value="\${b.name}" \${b.isCurrent ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}</option>\`
           ).join('');
           break;
+
+        case 'commits':
+          const commitSelect = document.getElementById('commitSelect');
+          const commits = message.payload.commits;
+          commitSelect.innerHTML = '<option value="">Select a commit...</option>' +
+            commits.map(c =>
+              \`<option value="\${c.hash}">\${c.shortHash} - \${c.message.substring(0, 50)}</option>\`
+            ).join('');
+          break;
+
+        case 'recordedCommit':
+          const recordedInfo = document.getElementById('recordedCommitInfo');
+          if (recordedInfo) {
+            const { recordedCommit, currentCommit, isMatching } = message.payload;
+            const statusClass = isMatching ? 'success' : 'warning';
+            const statusIcon = isMatching ? '✓' : '⚠';
+            recordedInfo.innerHTML = \`
+              <div class="recorded-commit-status \${statusClass}">
+                <span>\${statusIcon} Parent expects: <code>\${recordedCommit ? recordedCommit.substring(0, 8) : 'N/A'}</code></span>
+                <span>Current: <code>\${currentCommit ? currentCommit.substring(0, 8) : 'N/A'}</code></span>
+                \${!isMatching ? '<span class="mismatch-warning">Commits do not match!</span>' : ''}
+              </div>
+            \`;
+          }
+          break;
+
+        case 'updateSubmodules':
+          // Update data without full page refresh
+          submoduleData = message.payload.submodules;
+          saveState();
+          updateSubmoduleCards(submoduleData);
+          break;
+
+        case 'rebaseStatusUpdated':
+          updateRebaseUI();
+          break;
       }
     });
+
+    // Update cards dynamically without losing state
+    function updateSubmoduleCards(submodules) {
+      submodules.forEach(s => {
+        const card = document.querySelector(\`.submodule-card[data-path="\${s.path}"]\`);
+        if (card) {
+          // Update status
+          const statusEl = card.querySelector('.card-status');
+          if (statusEl) {
+            statusEl.className = 'card-status status-' + s.status;
+            statusEl.innerHTML = getStatusIcon(s.status) + ' ' + s.status;
+          }
+
+          // Update branch
+          const branchEl = card.querySelector('.info-value.branch');
+          if (branchEl) branchEl.textContent = s.currentBranch || 'detached';
+
+          // Update commit
+          const commitEl = card.querySelector('.info-value.commit');
+          if (commitEl) commitEl.textContent = s.currentCommit || 'N/A';
+
+          // Update sync status
+          const syncEl = card.querySelector('.sync-status');
+          if (syncEl) {
+            if (s.ahead > 0 || s.behind > 0) {
+              syncEl.style.display = 'flex';
+              syncEl.innerHTML = \`
+                <span class="sync-item ahead">↑ \${s.ahead} ahead</span>
+                <span class="sync-item behind">↓ \${s.behind} behind</span>
+              \`;
+            } else {
+              syncEl.style.display = 'none';
+            }
+          }
+        }
+      });
+    }
+
+    function getStatusIcon(status) {
+      const icons = {
+        'clean': '✓',
+        'modified': '●',
+        'uninitialized': '○',
+        'detached': '◎',
+        'conflict': '⚠',
+        'unknown': '?'
+      };
+      return icons[status] || '?';
+    }
+
+    // Initialize UI on load
+    document.addEventListener('DOMContentLoaded', () => {
+      updateSelectionUI();
+      updateRebaseUI();
+    });
+
+    // Also run immediately for cases where DOM is already loaded
+    updateSelectionUI();
+    updateRebaseUI();
   </script>
 </body>
 </html>`;
@@ -1043,6 +1368,7 @@ export class SubmoduleManagerPanel {
           <div class="card-title">
             <input type="checkbox" class="card-checkbox" onclick="toggleSelection('${submodule.path}')">
             <span class="card-name">${submodule.name}</span>
+            <span class="rebase-indicator" style="display: none; background: rgba(255, 165, 0, 0.2); color: var(--warning); padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-left: 8px;">⏳ REBASING</span>
           </div>
           <span class="card-status ${statusClass}">${statusIcon} ${submodule.status}</span>
         </div>
@@ -1050,11 +1376,11 @@ export class SubmoduleManagerPanel {
           <div class="card-info">
             <div class="info-item">
               <span class="info-label">Branch</span>
-              <span class="info-value">${submodule.currentBranch || 'detached'}</span>
+              <span class="info-value branch">${submodule.currentBranch || 'detached'}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Commit</span>
-              <span class="info-value">${submodule.currentCommit || 'N/A'}</span>
+              <span class="info-value commit">${submodule.currentCommit || 'N/A'}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Path</span>
@@ -1065,19 +1391,19 @@ export class SubmoduleManagerPanel {
               <span class="info-value">${submodule.branch || 'main'}</span>
             </div>
           </div>
-          ${(submodule.ahead > 0 || submodule.behind > 0) ? `
-          <div class="sync-status">
+          <div class="sync-status" style="${(submodule.ahead > 0 || submodule.behind > 0) ? '' : 'display: none'}">
             <span class="sync-item ahead">↑ ${submodule.ahead} ahead</span>
             <span class="sync-item behind">↓ ${submodule.behind} behind</span>
           </div>
-          ` : ''}
           <div class="card-actions">
-            <button class="btn btn-sm" onclick="openCheckoutModal('${submodule.path}')">⎇ Checkout</button>
-            <button class="btn btn-sm" onclick="pullChanges('${submodule.path}')">↓ Pull</button>
-            <button class="btn btn-sm" onclick="pushChanges('${submodule.path}')">↑ Push</button>
-            <button class="btn btn-sm" onclick="createPR('${submodule.path}')">⇅ PR</button>
-            <button class="btn btn-sm" onclick="openSubmodule('${submodule.path}')">📂 Open</button>
-            ${submodule.hasChanges ? `<button class="btn btn-sm" onclick="stageSubmodule('${submodule.path}')">+ Stage</button>` : ''}
+            <button class="btn btn-sm" onclick="openCheckoutModal('${submodule.path}')" title="Checkout branch">⎇ Branch</button>
+            <button class="btn btn-sm" onclick="openCommitModal('${submodule.path}')" title="Checkout specific commit">⎔ Commit</button>
+            <button class="btn btn-sm" onclick="pullChanges('${submodule.path}')" title="Pull changes">↓ Pull</button>
+            <button class="btn btn-sm" onclick="pushChanges('${submodule.path}')" title="Push changes">↑ Push</button>
+            <button class="btn btn-sm" onclick="createPR('${submodule.path}')" title="Create PR">⇅ PR</button>
+            <button class="btn btn-sm" onclick="openSubmodule('${submodule.path}')" title="Open in explorer">📂</button>
+            ${submodule.hasChanges ? `<button class="btn btn-sm" onclick="stageSubmodule('${submodule.path}')" title="Stage submodule pointer">+ Stage</button>` : ''}
+            <button class="btn btn-sm rebase-btn" onclick="toggleRebaseStatus('${submodule.path}')" title="Mark as rebasing to prevent accidental updates">⏳ Mark Rebasing</button>
           </div>
         </div>
       </div>
