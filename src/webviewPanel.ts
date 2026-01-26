@@ -871,8 +871,8 @@ export class SubmoduleManagerPanel {
     <header>
       <h1>Submodule Manager</h1>
       <div class="header-actions">
-        <button class="btn" onclick="refresh()">↻ Refresh</button>
-        <button class="btn btn-primary" onclick="openCreateBranchModal()">+ Create Branch</button>
+        <button class="btn" data-action="refresh">↻ Refresh</button>
+        <button class="btn btn-primary" data-action="openCreateBranchModal">+ Create Branch</button>
       </div>
     </header>
 
@@ -897,12 +897,12 @@ export class SubmoduleManagerPanel {
 
     <div class="toolbar">
       <div class="search-box">
-        <input type="text" id="searchInput" placeholder="Search submodules..." oninput="filterSubmodules()">
+        <input type="text" id="searchInput" placeholder="Search submodules...">
       </div>
-      <button class="btn" onclick="selectAll()">☑ Select All</button>
-      <button class="btn" onclick="deselectAll()">☐ Deselect All</button>
-      <button class="btn" onclick="initAll()">↓ Init All</button>
-      <button class="btn" onclick="updateAll()">⟳ Update All</button>
+      <button class="btn" data-action="selectAll">☑ Select All</button>
+      <button class="btn" data-action="deselectAll">☐ Deselect All</button>
+      <button class="btn" data-action="initAll">↓ Init All</button>
+      <button class="btn" data-action="updateAll">⟳ Update All</button>
     </div>
 
     ${submodules.length > 0 ? `
@@ -913,16 +913,16 @@ export class SubmoduleManagerPanel {
     <div class="empty-state">
       <h2>No Submodules Found</h2>
       <p>This workspace doesn't have any Git submodules yet.</p>
-      <button class="btn btn-primary" onclick="initAll()">Initialize Submodules</button>
+      <button class="btn btn-primary" data-action="initAll">Initialize Submodules</button>
     </div>
     `}
   </div>
 
   <div class="selection-bar" id="selectionBar">
     <span class="selection-count"><span id="selectedCount">0</span> selected</span>
-    <button class="btn btn-primary btn-sm" onclick="createBranchForSelected()">Create Branch</button>
-    <button class="btn btn-sm" onclick="syncSelected()">Sync</button>
-    <button class="btn btn-sm" onclick="deselectAll()">Cancel</button>
+    <button class="btn btn-primary btn-sm" data-action="createBranchForSelected">Create Branch</button>
+    <button class="btn btn-sm" data-action="syncSelected">Sync</button>
+    <button class="btn btn-sm" data-action="deselectAll">Cancel</button>
   </div>
 
   <!-- Create Branch Modal -->
@@ -930,7 +930,7 @@ export class SubmoduleManagerPanel {
     <div class="modal">
       <div class="modal-header">
         <span class="modal-title">Create Branch</span>
-        <button class="modal-close" onclick="closeModal('createBranchModal')">&times;</button>
+        <button class="modal-close" data-action="closeModal" data-modal="createBranchModal">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
@@ -954,8 +954,8 @@ export class SubmoduleManagerPanel {
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn" onclick="closeModal('createBranchModal')">Cancel</button>
-        <button class="btn btn-primary" onclick="createBranch()">Create Branch</button>
+        <button class="btn" data-action="closeModal" data-modal="createBranchModal">Cancel</button>
+        <button class="btn btn-primary" data-action="createBranch">Create Branch</button>
       </div>
     </div>
   </div>
@@ -965,7 +965,7 @@ export class SubmoduleManagerPanel {
     <div class="modal">
       <div class="modal-header">
         <span class="modal-title">Checkout Branch</span>
-        <button class="modal-close" onclick="closeModal('checkoutModal')">&times;</button>
+        <button class="modal-close" data-action="closeModal" data-modal="checkoutModal">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
@@ -977,8 +977,8 @@ export class SubmoduleManagerPanel {
         <input type="hidden" id="checkoutSubmodule">
       </div>
       <div class="modal-footer">
-        <button class="btn" onclick="closeModal('checkoutModal')">Cancel</button>
-        <button class="btn btn-primary" onclick="checkoutBranch()">Checkout</button>
+        <button class="btn" data-action="closeModal" data-modal="checkoutModal">Cancel</button>
+        <button class="btn btn-primary" data-action="checkoutBranch">Checkout</button>
       </div>
     </div>
   </div>
@@ -988,7 +988,7 @@ export class SubmoduleManagerPanel {
     <div class="modal">
       <div class="modal-header">
         <span class="modal-title">Checkout Specific Commit</span>
-        <button class="modal-close" onclick="closeModal('commitModal')">&times;</button>
+        <button class="modal-close" data-action="closeModal" data-modal="commitModal">&times;</button>
       </div>
       <div class="modal-body">
         <div id="recordedCommitInfo" class="form-group">
@@ -1007,9 +1007,9 @@ export class SubmoduleManagerPanel {
         <input type="hidden" id="commitSubmodule">
       </div>
       <div class="modal-footer">
-        <button class="btn" onclick="closeModal('commitModal')">Cancel</button>
-        <button class="btn" onclick="updateToRecorded(document.getElementById('commitSubmodule').value); closeModal('commitModal');">Use Recorded</button>
-        <button class="btn btn-primary" onclick="checkoutCommit()">Checkout</button>
+        <button class="btn" data-action="closeModal" data-modal="commitModal">Cancel</button>
+        <button class="btn" data-action="useRecorded">Use Recorded</button>
+        <button class="btn btn-primary" data-action="checkoutCommit">Checkout</button>
       </div>
     </div>
   </div>
@@ -1036,59 +1036,159 @@ export class SubmoduleManagerPanel {
       vscode.postMessage({ type, payload });
     }
 
-    function refresh() {
-      postMessage('refresh');
-    }
+    // Action handlers
+    const actions = {
+      refresh: () => postMessage('refresh'),
+      initAll: () => postMessage('initSubmodules'),
+      updateAll: () => postMessage('updateSubmodules'),
 
-    function initAll() {
-      postMessage('initSubmodules');
-    }
+      selectAll: () => {
+        document.querySelectorAll('.submodule-card').forEach(card => {
+          selectedSubmodules.add(card.dataset.path);
+          const cb = card.querySelector('.card-checkbox');
+          if (cb) cb.checked = true;
+          card.classList.add('selected');
+        });
+        saveState();
+        updateSelectionUI();
+      },
 
-    function updateAll() {
-      postMessage('updateSubmodules');
-    }
+      deselectAll: () => {
+        selectedSubmodules.clear();
+        document.querySelectorAll('.submodule-card').forEach(card => {
+          const cb = card.querySelector('.card-checkbox');
+          if (cb) cb.checked = false;
+          card.classList.remove('selected');
+        });
+        saveState();
+        updateSelectionUI();
+      },
 
-    function filterSubmodules() {
-      const query = document.getElementById('searchInput').value.toLowerCase();
-      const cards = document.querySelectorAll('.submodule-card');
+      toggleSelection: (el) => {
+        const path = el.dataset.submodule;
+        if (selectedSubmodules.has(path)) {
+          selectedSubmodules.delete(path);
+        } else {
+          selectedSubmodules.add(path);
+        }
+        saveState();
+        updateSelectionUI();
+      },
 
-      cards.forEach(card => {
+      openCreateBranchModal: () => {
+        document.getElementById('createBranchModal').classList.add('active');
+      },
+
+      closeModal: (el) => {
+        const modalId = el.dataset.modal;
+        document.getElementById(modalId).classList.remove('active');
+      },
+
+      createBranch: () => {
+        const branchName = document.getElementById('branchName').value.trim();
+        const baseBranch = document.getElementById('baseBranch').value.trim() || 'main';
+        if (!branchName) return;
+
+        const checkboxes = document.querySelectorAll('.branch-submodule:checked');
+        const submodules = Array.from(checkboxes).map(cb => cb.value);
+        if (submodules.length === 0) return;
+
+        postMessage('createBranch', { submodules, branchName, baseBranch });
+        document.getElementById('createBranchModal').classList.remove('active');
+      },
+
+      createBranchForSelected: () => {
+        if (selectedSubmodules.size === 0) return;
+        document.querySelectorAll('.branch-submodule').forEach(cb => {
+          cb.checked = selectedSubmodules.has(cb.value);
+        });
+        document.getElementById('createBranchModal').classList.add('active');
+      },
+
+      openCheckoutModal: (el) => {
+        const submodule = el.dataset.submodule;
+        document.getElementById('checkoutSubmodule').value = submodule;
+        document.getElementById('branchSelect').innerHTML = '<option value="">Loading branches...</option>';
+        document.getElementById('checkoutModal').classList.add('active');
+        postMessage('getBranches', { submodule });
+      },
+
+      checkoutBranch: () => {
+        const submodule = document.getElementById('checkoutSubmodule').value;
+        const branch = document.getElementById('branchSelect').value;
+        if (!branch) return;
+        postMessage('checkoutBranch', { submodule, branch });
+        document.getElementById('checkoutModal').classList.remove('active');
+      },
+
+      openCommitModal: (el) => {
+        const submodule = el.dataset.submodule;
+        document.getElementById('commitSubmodule').value = submodule;
+        document.getElementById('commitSelect').innerHTML = '<option value="">Loading commits...</option>';
+        document.getElementById('commitInput').value = '';
+        document.getElementById('commitModal').classList.add('active');
+        postMessage('getCommits', { submodule });
+        postMessage('getRecordedCommit', { submodule });
+      },
+
+      checkoutCommit: () => {
+        const submodule = document.getElementById('commitSubmodule').value;
+        const commitInput = document.getElementById('commitInput').value.trim();
+        const commitSelect = document.getElementById('commitSelect').value;
+        const commit = commitInput || commitSelect;
+        if (!commit) return;
+        postMessage('checkoutCommit', { submodule, commit });
+        document.getElementById('commitModal').classList.remove('active');
+      },
+
+      useRecorded: () => {
+        const submodule = document.getElementById('commitSubmodule').value;
+        postMessage('updateToRecorded', { submodule });
+        document.getElementById('commitModal').classList.remove('active');
+      },
+
+      toggleRebaseStatus: (el) => {
+        const submodule = el.dataset.submodule;
+        const isCurrentlyRebasing = rebasingSubmodules.has(submodule);
+        if (isCurrentlyRebasing) {
+          rebasingSubmodules.delete(submodule);
+        } else {
+          rebasingSubmodules.add(submodule);
+        }
+        saveState();
+        postMessage('setRebaseStatus', { submodule, isRebasing: !isCurrentlyRebasing });
+        updateRebaseUI();
+      },
+
+      pullChanges: (el) => postMessage('pullChanges', { submodule: el.dataset.submodule }),
+      pushChanges: (el) => postMessage('pushChanges', { submodule: el.dataset.submodule }),
+      createPR: (el) => postMessage('createPR', { submodule: el.dataset.submodule }),
+      openSubmodule: (el) => postMessage('openSubmodule', { submodule: el.dataset.submodule }),
+      stageSubmodule: (el) => postMessage('stageSubmodule', { submodule: el.dataset.submodule }),
+      syncSelected: () => postMessage('syncVersions', { submodules: Array.from(selectedSubmodules) })
+    };
+
+    // Event delegation - handle all clicks
+    document.addEventListener('click', (e) => {
+      const target = e.target.closest('[data-action]');
+      if (target) {
+        const action = target.dataset.action;
+        if (actions[action]) {
+          actions[action](target);
+        }
+      }
+    });
+
+    // Handle search input
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      document.querySelectorAll('.submodule-card').forEach(card => {
         const name = card.dataset.name.toLowerCase();
         const path = card.dataset.path.toLowerCase();
         const visible = name.includes(query) || path.includes(query);
         card.style.display = visible ? 'block' : 'none';
       });
-    }
-
-    function toggleSelection(path) {
-      if (selectedSubmodules.has(path)) {
-        selectedSubmodules.delete(path);
-      } else {
-        selectedSubmodules.add(path);
-      }
-      saveState();
-      updateSelectionUI();
-    }
-
-    function selectAll() {
-      document.querySelectorAll('.submodule-card').forEach(card => {
-        selectedSubmodules.add(card.dataset.path);
-        card.querySelector('.card-checkbox').checked = true;
-        card.classList.add('selected');
-      });
-      saveState();
-      updateSelectionUI();
-    }
-
-    function deselectAll() {
-      selectedSubmodules.clear();
-      document.querySelectorAll('.submodule-card').forEach(card => {
-        card.querySelector('.card-checkbox').checked = false;
-        card.classList.remove('selected');
-      });
-      saveState();
-      updateSelectionUI();
-    }
+    });
 
     function updateSelectionUI() {
       const bar = document.getElementById('selectionBar');
@@ -1110,100 +1210,6 @@ export class SubmoduleManagerPanel {
       });
     }
 
-    function openCreateBranchModal() {
-      document.getElementById('createBranchModal').classList.add('active');
-    }
-
-    function closeModal(modalId) {
-      document.getElementById(modalId).classList.remove('active');
-    }
-
-    function createBranch() {
-      const branchName = document.getElementById('branchName').value.trim();
-      const baseBranch = document.getElementById('baseBranch').value.trim() || 'main';
-
-      if (!branchName) {
-        return;
-      }
-
-      const checkboxes = document.querySelectorAll('.branch-submodule:checked');
-      const submodules = Array.from(checkboxes).map(cb => cb.value);
-
-      if (submodules.length === 0) {
-        return;
-      }
-
-      postMessage('createBranch', { submodules, branchName, baseBranch });
-      closeModal('createBranchModal');
-    }
-
-    function createBranchForSelected() {
-      if (selectedSubmodules.size === 0) return;
-
-      // Pre-select the selected submodules in the modal
-      document.querySelectorAll('.branch-submodule').forEach(cb => {
-        cb.checked = selectedSubmodules.has(cb.value);
-      });
-
-      openCreateBranchModal();
-    }
-
-    function openCheckoutModal(submodule) {
-      document.getElementById('checkoutSubmodule').value = submodule;
-      document.getElementById('branchSelect').innerHTML = '<option value="">Loading branches...</option>';
-      document.getElementById('checkoutModal').classList.add('active');
-      postMessage('getBranches', { submodule });
-    }
-
-    function checkoutBranch() {
-      const submodule = document.getElementById('checkoutSubmodule').value;
-      const branch = document.getElementById('branchSelect').value;
-
-      if (!branch) return;
-
-      postMessage('checkoutBranch', { submodule, branch });
-      closeModal('checkoutModal');
-    }
-
-    // New: Checkout specific commit modal
-    function openCommitModal(submodule) {
-      document.getElementById('commitSubmodule').value = submodule;
-      document.getElementById('commitSelect').innerHTML = '<option value="">Loading commits...</option>';
-      document.getElementById('commitInput').value = '';
-      document.getElementById('commitModal').classList.add('active');
-      postMessage('getCommits', { submodule });
-      postMessage('getRecordedCommit', { submodule });
-    }
-
-    function checkoutCommit() {
-      const submodule = document.getElementById('commitSubmodule').value;
-      const commitInput = document.getElementById('commitInput').value.trim();
-      const commitSelect = document.getElementById('commitSelect').value;
-      const commit = commitInput || commitSelect;
-
-      if (!commit) return;
-
-      postMessage('checkoutCommit', { submodule, commit });
-      closeModal('commitModal');
-    }
-
-    function updateToRecorded(submodule) {
-      postMessage('updateToRecorded', { submodule });
-    }
-
-    // Rebase workflow functions
-    function toggleRebaseStatus(submodule) {
-      const isCurrentlyRebasing = rebasingSubmodules.has(submodule);
-      if (isCurrentlyRebasing) {
-        rebasingSubmodules.delete(submodule);
-      } else {
-        rebasingSubmodules.add(submodule);
-      }
-      saveState();
-      postMessage('setRebaseStatus', { submodule, isRebasing: !isCurrentlyRebasing });
-      updateRebaseUI();
-    }
-
     function updateRebaseUI() {
       document.querySelectorAll('.submodule-card').forEach(card => {
         const path = card.dataset.path;
@@ -1218,30 +1224,6 @@ export class SubmoduleManagerPanel {
           if (rebaseBtn) rebaseBtn.textContent = '⏳ Mark Rebasing';
         }
       });
-    }
-
-    function pullChanges(submodule) {
-      postMessage('pullChanges', { submodule });
-    }
-
-    function pushChanges(submodule) {
-      postMessage('pushChanges', { submodule });
-    }
-
-    function createPR(submodule) {
-      postMessage('createPR', { submodule });
-    }
-
-    function openSubmodule(submodule) {
-      postMessage('openSubmodule', { submodule });
-    }
-
-    function stageSubmodule(submodule) {
-      postMessage('stageSubmodule', { submodule });
-    }
-
-    function syncSelected() {
-      postMessage('syncVersions', { submodules: Array.from(selectedSubmodules) });
     }
 
     // Handle messages from extension
@@ -1283,7 +1265,6 @@ export class SubmoduleManagerPanel {
           break;
 
         case 'updateSubmodules':
-          // Update data without full page refresh
           submoduleData = message.payload.submodules;
           saveState();
           updateSubmoduleCards(submoduleData);
@@ -1295,27 +1276,22 @@ export class SubmoduleManagerPanel {
       }
     });
 
-    // Update cards dynamically without losing state
     function updateSubmoduleCards(submodules) {
       submodules.forEach(s => {
         const card = document.querySelector(\`.submodule-card[data-path="\${s.path}"]\`);
         if (card) {
-          // Update status
           const statusEl = card.querySelector('.card-status');
           if (statusEl) {
             statusEl.className = 'card-status status-' + s.status;
             statusEl.innerHTML = getStatusIcon(s.status) + ' ' + s.status;
           }
 
-          // Update branch
           const branchEl = card.querySelector('.info-value.branch');
           if (branchEl) branchEl.textContent = s.currentBranch || 'detached';
 
-          // Update commit
           const commitEl = card.querySelector('.info-value.commit');
           if (commitEl) commitEl.textContent = s.currentCommit || 'N/A';
 
-          // Update sync status
           const syncEl = card.querySelector('.sync-status');
           if (syncEl) {
             if (s.ahead > 0 || s.behind > 0) {
@@ -1345,12 +1321,6 @@ export class SubmoduleManagerPanel {
     }
 
     // Initialize UI on load
-    document.addEventListener('DOMContentLoaded', () => {
-      updateSelectionUI();
-      updateRebaseUI();
-    });
-
-    // Also run immediately for cases where DOM is already loaded
     updateSelectionUI();
     updateRebaseUI();
   </script>
@@ -1366,7 +1336,7 @@ export class SubmoduleManagerPanel {
       <div class="submodule-card" data-name="${submodule.name}" data-path="${submodule.path}" style="animation-delay: ${index * 0.05}s">
         <div class="card-header">
           <div class="card-title">
-            <input type="checkbox" class="card-checkbox" onclick="toggleSelection('${submodule.path}')">
+            <input type="checkbox" class="card-checkbox" data-action="toggleSelection" data-submodule="${submodule.path}">
             <span class="card-name">${submodule.name}</span>
             <span class="rebase-indicator" style="display: none; background: rgba(255, 165, 0, 0.2); color: var(--warning); padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-left: 8px;">⏳ REBASING</span>
           </div>
@@ -1396,14 +1366,14 @@ export class SubmoduleManagerPanel {
             <span class="sync-item behind">↓ ${submodule.behind} behind</span>
           </div>
           <div class="card-actions">
-            <button class="btn btn-sm" onclick="openCheckoutModal('${submodule.path}')" title="Checkout branch">⎇ Branch</button>
-            <button class="btn btn-sm" onclick="openCommitModal('${submodule.path}')" title="Checkout specific commit">⎔ Commit</button>
-            <button class="btn btn-sm" onclick="pullChanges('${submodule.path}')" title="Pull changes">↓ Pull</button>
-            <button class="btn btn-sm" onclick="pushChanges('${submodule.path}')" title="Push changes">↑ Push</button>
-            <button class="btn btn-sm" onclick="createPR('${submodule.path}')" title="Create PR">⇅ PR</button>
-            <button class="btn btn-sm" onclick="openSubmodule('${submodule.path}')" title="Open in explorer">📂</button>
-            ${submodule.hasChanges ? `<button class="btn btn-sm" onclick="stageSubmodule('${submodule.path}')" title="Stage submodule pointer">+ Stage</button>` : ''}
-            <button class="btn btn-sm rebase-btn" onclick="toggleRebaseStatus('${submodule.path}')" title="Mark as rebasing to prevent accidental updates">⏳ Mark Rebasing</button>
+            <button class="btn btn-sm" data-action="openCheckoutModal" data-submodule="${submodule.path}" title="Checkout branch">⎇ Branch</button>
+            <button class="btn btn-sm" data-action="openCommitModal" data-submodule="${submodule.path}" title="Checkout specific commit">⎔ Commit</button>
+            <button class="btn btn-sm" data-action="pullChanges" data-submodule="${submodule.path}" title="Pull changes">↓ Pull</button>
+            <button class="btn btn-sm" data-action="pushChanges" data-submodule="${submodule.path}" title="Push changes">↑ Push</button>
+            <button class="btn btn-sm" data-action="createPR" data-submodule="${submodule.path}" title="Create PR">⇅ PR</button>
+            <button class="btn btn-sm" data-action="openSubmodule" data-submodule="${submodule.path}" title="Open in explorer">📂</button>
+            ${submodule.hasChanges ? `<button class="btn btn-sm" data-action="stageSubmodule" data-submodule="${submodule.path}" title="Stage submodule pointer">+ Stage</button>` : ''}
+            <button class="btn btn-sm rebase-btn" data-action="toggleRebaseStatus" data-submodule="${submodule.path}" title="Mark as rebasing to prevent accidental updates">⏳ Mark Rebasing</button>
           </div>
         </div>
       </div>
