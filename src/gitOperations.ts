@@ -260,51 +260,52 @@ export class GitOperations {
    */
   async getBranches(submodulePath: string): Promise<BranchInfo[]> {
     const fullPath = path.join(this.workspaceRoot, submodulePath);
-    const branchMap = new Map<string, BranchInfo>();
+    const branches: BranchInfo[] = [];
 
     try {
-      // Single command to get all branches with current marker
-      // Format: * for current, refname, commit hash
-      const output = await this.execGit(
-        ['branch', '-a', '--format=%(HEAD)|%(refname:short)|%(objectname:short)'],
-        fullPath
-      );
+      // Use simple git branch -a command (most compatible)
+      const output = await this.execGit(['branch', '-a'], fullPath);
+      const seenNames = new Set<string>();
 
-      for (const line of output.split('\n').filter(l => l.trim())) {
-        const parts = line.split('|');
-        const isCurrent = parts[0]?.trim() === '*';
-        const fullName = parts[1]?.trim() || '';
-        const commit = parts[2]?.trim() || '';
-
-        if (!fullName || fullName.includes('HEAD')) {
+      for (const line of output.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.includes('HEAD')) {
           continue;
         }
 
-        // Check if remote branch
-        const isRemote = fullName.startsWith('origin/') || fullName.startsWith('remotes/');
-        const name = fullName.replace(/^(remotes\/)?origin\//, '');
+        const isCurrent = trimmed.startsWith('*');
+        const branchName = trimmed.replace(/^\*\s*/, '').trim();
 
-        // Only add if not already present (prefer local branch info)
-        if (!branchMap.has(name)) {
-          branchMap.set(name, {
-            name,
-            isRemote,
-            isCurrent: isCurrent && !isRemote,
-            commit
-          });
+        // Check if remote branch
+        const isRemote = branchName.startsWith('remotes/origin/') || branchName.startsWith('origin/');
+        const cleanName = branchName
+          .replace(/^remotes\/origin\//, '')
+          .replace(/^origin\//, '');
+
+        // Skip duplicates (prefer local over remote)
+        if (seenNames.has(cleanName)) {
+          continue;
         }
+        seenNames.add(cleanName);
+
+        branches.push({
+          name: cleanName,
+          isRemote,
+          isCurrent: isCurrent && !isRemote,
+          commit: ''
+        });
       }
+
+      // Sort: current first, then alphabetically
+      branches.sort((a, b) => {
+        if (a.isCurrent) return -1;
+        if (b.isCurrent) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
     } catch (error) {
       console.error('Error getting branches:', error);
     }
-
-    // Convert to array and sort (current branch first, then alphabetically)
-    const branches = Array.from(branchMap.values());
-    branches.sort((a, b) => {
-      if (a.isCurrent) return -1;
-      if (b.isCurrent) return 1;
-      return a.name.localeCompare(b.name);
-    });
 
     return branches;
   }
