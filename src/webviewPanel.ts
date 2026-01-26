@@ -1226,6 +1226,27 @@ export class SubmoduleManagerPanel {
     // Event delegation - handle all clicks
     document.body.addEventListener('click', function(e) {
       let el = e.target;
+
+      // Special handling for checkboxes - don't prevent default, just track state
+      if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.dataset.action === 'toggleSelection') {
+        const path = el.dataset.submodule;
+        if (path) {
+          // Sync our state with checkbox state (checkbox already toggled)
+          if (el.checked) {
+            selectedSubmodules.add(path);
+          } else {
+            selectedSubmodules.delete(path);
+          }
+          const card = el.closest('.submodule-card');
+          if (card) {
+            card.classList.toggle('selected', el.checked);
+          }
+          saveState();
+          updateSelectionUI();
+        }
+        return;
+      }
+
       // Walk up the DOM tree to find element with data-action
       while (el && el !== document.body) {
         if (el.dataset && el.dataset.action) {

@@ -256,20 +256,13 @@ export class GitOperations {
   }
 
   /**
-   * Get branches for a submodule
+   * Get branches for a submodule (fast - uses cached refs, no network calls)
    */
   async getBranches(submodulePath: string): Promise<BranchInfo[]> {
     const fullPath = path.join(this.workspaceRoot, submodulePath);
     const branchMap = new Map<string, BranchInfo>();
 
     try {
-      // Fetch to get latest remote branches
-      try {
-        await this.execGit(['fetch', '--all'], fullPath);
-      } catch {
-        // Fetch might fail if no network, continue anyway
-      }
-
       // Get current branch
       let currentBranch = '';
       try {
