@@ -256,72 +256,43 @@ export class GitOperations {
   }
 
   /**
-   * Get branches for a submodule (fast - uses cached refs, no network calls)
+   * Get branches for a submodule (fast - single git command, no network calls)
    */
   async getBranches(submodulePath: string): Promise<BranchInfo[]> {
     const fullPath = path.join(this.workspaceRoot, submodulePath);
     const branchMap = new Map<string, BranchInfo>();
 
     try {
-      // Get current branch
-      let currentBranch = '';
-      try {
-        currentBranch = await this.execGit(['rev-parse', '--abbrev-ref', 'HEAD'], fullPath);
-        if (currentBranch === 'HEAD') {
-          currentBranch = ''; // Detached
+      // Single command to get all branches with current marker
+      // Format: * for current, refname, commit hash
+      const output = await this.execGit(
+        ['branch', '-a', '--format=%(HEAD)|%(refname:short)|%(objectname:short)'],
+        fullPath
+      );
+
+      for (const line of output.split('\n').filter(l => l.trim())) {
+        const parts = line.split('|');
+        const isCurrent = parts[0]?.trim() === '*';
+        const fullName = parts[1]?.trim() || '';
+        const commit = parts[2]?.trim() || '';
+
+        if (!fullName || fullName.includes('HEAD')) {
+          continue;
         }
-      } catch {
-        // Detached HEAD
-      }
 
-      // Get local branches first
-      try {
-        const localOutput = await this.execGit(['branch', '--format=%(refname:short)|%(objectname:short)'], fullPath);
-        for (const line of localOutput.split('\n').filter(l => l.trim())) {
-          const parts = line.split('|');
-          const name = parts[0]?.trim();
-          const commit = parts[1]?.trim() || '';
+        // Check if remote branch
+        const isRemote = fullName.startsWith('origin/') || fullName.startsWith('remotes/');
+        const name = fullName.replace(/^(remotes\/)?origin\//, '');
 
-          if (name && name !== 'HEAD') {
-            branchMap.set(name, {
-              name,
-              isRemote: false,
-              isCurrent: name === currentBranch,
-              commit
-            });
-          }
+        // Only add if not already present (prefer local branch info)
+        if (!branchMap.has(name)) {
+          branchMap.set(name, {
+            name,
+            isRemote,
+            isCurrent: isCurrent && !isRemote,
+            commit
+          });
         }
-      } catch {
-        // No local branches
-      }
-
-      // Get remote branches
-      try {
-        const remoteOutput = await this.execGit(['branch', '-r', '--format=%(refname:short)|%(objectname:short)'], fullPath);
-        for (const line of remoteOutput.split('\n').filter(l => l.trim())) {
-          const parts = line.split('|');
-          const fullName = parts[0]?.trim();
-          const commit = parts[1]?.trim() || '';
-
-          if (!fullName || fullName.includes('HEAD')) {
-            continue;
-          }
-
-          // Remove origin/ prefix
-          const name = fullName.replace(/^origin\//, '');
-
-          // Only add if not already present (prefer local branch info)
-          if (!branchMap.has(name)) {
-            branchMap.set(name, {
-              name,
-              isRemote: true,
-              isCurrent: false,
-              commit
-            });
-          }
-        }
-      } catch {
-        // No remote branches
       }
     } catch (error) {
       console.error('Error getting branches:', error);
