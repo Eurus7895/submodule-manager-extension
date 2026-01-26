@@ -170,9 +170,12 @@ export class GitOperations {
       try {
         currentBranch = await this.execGit(['rev-parse', '--abbrev-ref', 'HEAD'], fullPath);
         if (currentBranch === 'HEAD') {
+          // Detached HEAD - show empty branch so UI can display "(detached)"
+          currentBranch = '';
           status = 'detached';
         }
       } catch {
+        currentBranch = '';
         status = 'detached';
       }
 
