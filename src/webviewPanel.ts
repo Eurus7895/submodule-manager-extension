@@ -529,6 +529,13 @@ export class SubmoduleManagerPanel {
     }
 
     .stat-value.success { color: var(--success); }
+
+    .stat-desc {
+      font-size: 10px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      opacity: 0.8;
+    }
     .stat-value.warning { color: var(--warning); }
     .stat-value.error { color: var(--error); }
 
@@ -905,21 +912,25 @@ export class SubmoduleManagerPanel {
     </header>
 
     <div class="stats">
-      <div class="stat-card">
+      <div class="stat-card" title="Total number of submodules configured in this repository">
         <div class="stat-label">Total Submodules</div>
         <div class="stat-value">${submodules.length}</div>
+        <div class="stat-desc">All configured submodules</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" title="Submodules on a branch with no uncommitted changes">
         <div class="stat-label">Clean</div>
         <div class="stat-value success">${submodules.filter(s => s.status === 'clean').length}</div>
+        <div class="stat-desc">On branch, no changes</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" title="Submodules with uncommitted changes (staged or unstaged files)">
         <div class="stat-label">Modified</div>
         <div class="stat-value warning">${submodules.filter(s => s.status === 'modified').length}</div>
+        <div class="stat-desc">Has uncommitted changes</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" title="Submodules that are detached (not on a branch), uninitialized, or have conflicts">
         <div class="stat-label">Needs Attention</div>
         <div class="stat-value error">${submodules.filter(s => ['uninitialized', 'conflict', 'detached'].includes(s.status)).length}</div>
+        <div class="stat-desc">Detached, uninitialized, or conflict</div>
       </div>
     </div>
 
@@ -1094,11 +1105,27 @@ export class SubmoduleManagerPanel {
 
       toggleSelection: (el) => {
         const path = el.dataset.submodule;
+        if (!path) return;
+
+        // Toggle selection state
         if (selectedSubmodules.has(path)) {
           selectedSubmodules.delete(path);
         } else {
           selectedSubmodules.add(path);
         }
+
+        // Update checkbox state directly
+        const checkbox = el.tagName === 'INPUT' ? el : el.querySelector('.card-checkbox');
+        if (checkbox) {
+          checkbox.checked = selectedSubmodules.has(path);
+        }
+
+        // Update the card's selected class
+        const card = el.closest('.submodule-card');
+        if (card) {
+          card.classList.toggle('selected', selectedSubmodules.has(path));
+        }
+
         saveState();
         updateSelectionUI();
       },
@@ -1270,10 +1297,14 @@ export class SubmoduleManagerPanel {
       switch (message.type) {
         case 'branches':
           const branchSelect = document.getElementById('branchSelect');
-          const branches = message.payload.branches;
-          branchSelect.innerHTML = branches.map(b =>
-            \`<option value="\${b.name}" \${b.isCurrent ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}</option>\`
-          ).join('');
+          const branches = message.payload.branches || [];
+          if (branches.length === 0) {
+            branchSelect.innerHTML = '<option value="">No branches found</option>';
+          } else {
+            branchSelect.innerHTML = branches.map(b =>
+              \`<option value="\${b.name}" \${b.isCurrent ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
+            ).join('');
+          }
           break;
 
         case 'commits':
@@ -1377,7 +1408,7 @@ export class SubmoduleManagerPanel {
     return `
       <div class="submodule-card" data-name="${submodule.name}" data-path="${submodule.path}" style="animation-delay: ${index * 0.05}s">
         <div class="card-header">
-          <div class="card-title">
+          <div class="card-title" data-action="toggleSelection" data-submodule="${submodule.path}" style="cursor: pointer;">
             <input type="checkbox" class="card-checkbox" data-action="toggleSelection" data-submodule="${submodule.path}">
             <span class="card-name">${submodule.name}</span>
             <span class="rebase-indicator" style="display: none; background: rgba(255, 165, 0, 0.2); color: var(--warning); padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-left: 8px;">⏳ REBASING</span>
