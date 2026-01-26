@@ -478,7 +478,7 @@ export class GitOperations {
   }
 
   /**
-   * Sync submodules to their configured branches
+   * Sync submodules to their recorded commits in the parent repository
    * @param submodulePaths Optional list of submodule paths to sync. If not provided, syncs all.
    */
   async syncAllSubmodules(submodulePaths?: string[]): Promise<Map<string, CommandResult>> {
@@ -491,9 +491,18 @@ export class GitOperations {
         continue;
       }
 
-      if (submodule.branch) {
-        const result = await this.syncSubmodule(submodule.path, submodule.branch);
+      // Get the recorded commit from the parent repository
+      const recordedCommit = await this.getRecordedCommit(submodule.path);
+
+      if (recordedCommit) {
+        // Sync to the recorded commit, not the branch
+        const result = await this.syncSubmodule(submodule.path, recordedCommit);
         results.set(submodule.path, result);
+      } else {
+        results.set(submodule.path, {
+          success: false,
+          message: `No recorded commit found for '${submodule.path}'`
+        });
       }
     }
 

@@ -247,16 +247,29 @@ export class SubmoduleManagerPanel {
     const submodulesToSync = payload.submodules.length > 0 ? payload.submodules : undefined;
     const results = await this._gitOps.syncAllSubmodules(submodulesToSync);
     let successCount = 0;
+    const errors: string[] = [];
 
-    results.forEach((result) => {
+    results.forEach((result, submodulePath) => {
       if (result.success) {
         successCount++;
+      } else {
+        errors.push(`${submodulePath}: ${result.message}`);
       }
     });
 
-    vscode.window.showInformationMessage(
-      `Synced ${successCount}/${results.size} submodule(s)`
-    );
+    if (errors.length === 0) {
+      vscode.window.showInformationMessage(
+        `Successfully synced ${successCount} submodule(s) to recorded commits`
+      );
+    } else {
+      // Show detailed error message
+      const errorSummary = errors.length <= 3
+        ? errors.join(' | ')
+        : `${errors.slice(0, 2).join(' | ')} and ${errors.length - 2} more`;
+      vscode.window.showWarningMessage(
+        `Synced ${successCount}/${results.size}. Failed: ${errorSummary}`
+      );
+    }
     await this.refresh();
   }
 
@@ -376,8 +389,10 @@ export class SubmoduleManagerPanel {
     }
 
     .container {
-      max-width: 1200px;
-      margin: 0 auto;
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      box-sizing: border-box;
     }
 
     header {
@@ -519,8 +534,21 @@ export class SubmoduleManagerPanel {
 
     .submodule-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 16px;
+      width: 100%;
+    }
+
+    @media (min-width: 1400px) {
+      .submodule-grid {
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      }
+    }
+
+    @media (max-width: 700px) {
+      .submodule-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .submodule-card {
@@ -1169,26 +1197,35 @@ export class SubmoduleManagerPanel {
     };
 
     // Event delegation - handle all clicks
-    document.addEventListener('click', (e) => {
-      const target = e.target.closest('[data-action]');
-      if (target) {
-        const action = target.dataset.action;
-        if (actions[action]) {
-          actions[action](target);
+    document.body.addEventListener('click', function(e) {
+      let el = e.target;
+      // Walk up the DOM tree to find element with data-action
+      while (el && el !== document.body) {
+        if (el.dataset && el.dataset.action) {
+          const action = el.dataset.action;
+          if (actions[action]) {
+            e.preventDefault();
+            actions[action](el);
+          }
+          return;
         }
+        el = el.parentElement;
       }
     });
 
     // Handle search input
-    document.getElementById('searchInput').addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      document.querySelectorAll('.submodule-card').forEach(card => {
-        const name = card.dataset.name.toLowerCase();
-        const path = card.dataset.path.toLowerCase();
-        const visible = name.includes(query) || path.includes(query);
-        card.style.display = visible ? 'block' : 'none';
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+      searchInput.addEventListener('input', function(e) {
+        const query = (e.target.value || '').toLowerCase();
+        document.querySelectorAll('.submodule-card').forEach(function(card) {
+          const name = (card.dataset.name || '').toLowerCase();
+          const path = (card.dataset.path || '').toLowerCase();
+          const visible = name.includes(query) || path.includes(query);
+          card.style.display = visible ? 'block' : 'none';
+        });
       });
-    });
+    }
 
     function updateSelectionUI() {
       const bar = document.getElementById('selectionBar');
