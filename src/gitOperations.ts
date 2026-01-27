@@ -27,18 +27,22 @@ export class GitOperations {
   /**
    * Execute a git command and return the output
    */
-  private async execGit(args: string[], cwd?: string): Promise<string> {
+  private async execGit(args: string[], cwd?: string, timeoutMs: number = 30000): Promise<string> {
     const workDir = cwd || this.workspaceRoot;
     const command = `git ${args.join(' ')}`;
 
     try {
       const { stdout } = await execAsync(command, {
         cwd: workDir,
-        maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+        timeout: timeoutMs
       });
       return stdout.trim();
     } catch (error: unknown) {
-      const err = error as { stderr?: string; message?: string };
+      const err = error as { stderr?: string; message?: string; killed?: boolean };
+      if (err.killed) {
+        throw new Error(`Git command timed out after ${timeoutMs}ms`);
+      }
       throw new Error(err.stderr || err.message || 'Git command failed');
     }
   }
@@ -263,8 +267,8 @@ export class GitOperations {
     const branches: BranchInfo[] = [];
 
     try {
-      // Use simple git branch -a command (most compatible)
-      const output = await this.execGit(['branch', '-a'], fullPath);
+      // Use simple git branch -a command (most compatible) with 5s timeout
+      const output = await this.execGit(['branch', '-a'], fullPath, 5000);
       const seenNames = new Set<string>();
 
       for (const line of output.split('\n')) {
