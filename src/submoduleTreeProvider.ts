@@ -220,12 +220,18 @@ export class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeIt
 
   getChildren(): ActionTreeItem[] {
     return [
-      new ActionTreeItem('Open Manager Panel', 'submoduleManager.openPanel', 'dashboard'),
-      new ActionTreeItem('Create Branch', 'submoduleManager.createBranch', 'git-branch'),
-      new ActionTreeItem('Sync Versions', 'submoduleManager.syncVersions', 'sync'),
-      new ActionTreeItem('Initialize All', 'submoduleManager.initSubmodules', 'cloud-download'),
-      new ActionTreeItem('Update All', 'submoduleManager.updateSubmodules', 'cloud-upload'),
-      new ActionTreeItem('Refresh', 'submoduleManager.refresh', 'refresh')
+      new ActionTreeItem('Open Manager Panel', 'submoduleManager.openPanel', 'dashboard',
+        'Open the Submodule Manager webview panel'),
+      new ActionTreeItem('Create Branch', 'submoduleManager.createBranch', 'git-branch',
+        'Create a new branch across multiple submodules'),
+      new ActionTreeItem('Sync Versions', 'submoduleManager.syncVersions', 'sync',
+        'Sync all submodules to the commits recorded in the parent repository'),
+      new ActionTreeItem('Initialize All', 'submoduleManager.initSubmodules', 'cloud-download',
+        'Initialize and clone all submodules (git submodule update --init)'),
+      new ActionTreeItem('Update All', 'submoduleManager.updateSubmodules', 'cloud-upload',
+        'Update all submodules to latest from their remote branches'),
+      new ActionTreeItem('Refresh', 'submoduleManager.refresh', 'refresh',
+        'Refresh the submodule list and status')
     ];
   }
 
@@ -238,10 +244,12 @@ export class ActionTreeItem extends vscode.TreeItem {
   constructor(
     label: string,
     commandId: string,
-    icon: string
+    icon: string,
+    description?: string
   ) {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.iconPath = new vscode.ThemeIcon(icon);
+    this.tooltip = description || label;
     this.command = {
       title: label,
       command: commandId

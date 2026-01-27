@@ -247,16 +247,29 @@ export class SubmoduleManagerPanel {
     const submodulesToSync = payload.submodules.length > 0 ? payload.submodules : undefined;
     const results = await this._gitOps.syncAllSubmodules(submodulesToSync);
     let successCount = 0;
+    const errors: string[] = [];
 
-    results.forEach((result) => {
+    results.forEach((result, submodulePath) => {
       if (result.success) {
         successCount++;
+      } else {
+        errors.push(`${submodulePath}: ${result.message}`);
       }
     });
 
-    vscode.window.showInformationMessage(
-      `Synced ${successCount}/${results.size} submodule(s)`
-    );
+    if (errors.length === 0) {
+      vscode.window.showInformationMessage(
+        `Successfully synced ${successCount} submodule(s) to recorded commits`
+      );
+    } else {
+      // Show detailed error message
+      const errorSummary = errors.length <= 3
+        ? errors.join(' | ')
+        : `${errors.slice(0, 2).join(' | ')} and ${errors.length - 2} more`;
+      vscode.window.showWarningMessage(
+        `Synced ${successCount}/${results.size}. Failed: ${errorSummary}`
+      );
+    }
     await this.refresh();
   }
 
@@ -276,11 +289,19 @@ export class SubmoduleManagerPanel {
   }
 
   private async _sendBranches(payload: { submodule: string }) {
-    const branches = await this._gitOps.getBranches(payload.submodule);
-    this._panel.webview.postMessage({
-      type: 'branches',
-      payload: { submodule: payload.submodule, branches }
-    });
+    try {
+      const branches = await this._gitOps.getBranches(payload.submodule);
+      this._panel.webview.postMessage({
+        type: 'branches',
+        payload: { submodule: payload.submodule, branches }
+      });
+    } catch (error) {
+      console.error('Error getting branches:', error);
+      this._panel.webview.postMessage({
+        type: 'branches',
+        payload: { submodule: payload.submodule, branches: [] }
+      });
+    }
   }
 
   private async _checkoutCommit(payload: { submodule: string; commit: string }) {
@@ -376,8 +397,10 @@ export class SubmoduleManagerPanel {
     }
 
     .container {
-      max-width: 1200px;
-      margin: 0 auto;
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      box-sizing: border-box;
     }
 
     header {
@@ -514,69 +537,132 @@ export class SubmoduleManagerPanel {
     }
 
     .stat-value.success { color: var(--success); }
+
+    .stat-desc {
+      font-size: 10px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      opacity: 0.8;
+    }
     .stat-value.warning { color: var(--warning); }
     .stat-value.error { color: var(--error); }
 
-    .submodule-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-      gap: 16px;
+    .submodule-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
     }
 
-    .submodule-card {
+    .submodule-row {
+      display: flex;
+      align-items: center;
       background: var(--bg-secondary);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
+      border-radius: 6px;
+      padding: 12px 16px;
+      gap: 16px;
       transition: all 0.2s ease;
     }
 
-    .submodule-card:hover {
+    .submodule-row:hover {
       border-color: var(--accent);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      background: var(--bg-tertiary);
     }
 
-    .submodule-card.selected {
+    .submodule-row.selected {
       border-color: var(--accent);
       border-width: 2px;
+      background: rgba(var(--accent), 0.05);
     }
 
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px;
-      background: var(--bg-tertiary);
-      border-bottom: 1px solid var(--border);
-    }
-
-    .card-title {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .card-checkbox {
+    .row-checkbox {
       width: 18px;
       height: 18px;
       cursor: pointer;
       accent-color: var(--accent);
+      flex-shrink: 0;
     }
 
-    .card-name {
+    .row-name {
       font-weight: 600;
       font-size: 14px;
+      min-width: 150px;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .card-status {
+    .row-path {
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-width: 120px;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: var(--vscode-editor-font-family);
+    }
+
+    .row-branch {
+      font-size: 12px;
+      min-width: 100px;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .row-commit {
+      font-size: 12px;
+      font-family: var(--vscode-editor-font-family);
+      color: var(--text-secondary);
+      min-width: 70px;
+    }
+
+    .row-status {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 11px;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-size: 10px;
       font-weight: 500;
       text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    .row-sync {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      min-width: 100px;
+    }
+
+    .row-sync .ahead { color: var(--success); }
+    .row-sync .behind { color: var(--warning); }
+
+    .row-actions {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    .row-actions .btn {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    .rebase-badge {
+      background: rgba(255, 165, 0, 0.2);
+      color: var(--warning);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      animation: pulse 2s infinite;
     }
 
     .status-clean {
@@ -602,60 +688,6 @@ export class SubmoduleManagerPanel {
     .status-conflict {
       background: rgba(220, 53, 69, 0.15);
       color: var(--error);
-    }
-
-    .card-body {
-      padding: 16px;
-    }
-
-    .card-info {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-
-    .info-item {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .info-label {
-      font-size: 11px;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-    }
-
-    .info-value {
-      font-size: 13px;
-      font-weight: 500;
-      font-family: var(--vscode-editor-font-family);
-    }
-
-    .sync-status {
-      display: flex;
-      gap: 12px;
-      padding: 10px;
-      background: var(--bg-tertiary);
-      border-radius: 6px;
-      margin-bottom: 14px;
-    }
-
-    .sync-item {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 12px;
-    }
-
-    .sync-item.ahead { color: var(--success); }
-    .sync-item.behind { color: var(--warning); }
-
-    .card-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
     }
 
     .empty-state {
@@ -797,12 +829,12 @@ export class SubmoduleManagerPanel {
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(5px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .submodule-card {
-      animation: fadeIn 0.3s ease forwards;
+    .submodule-row {
+      animation: fadeIn 0.2s ease forwards;
     }
 
     .spinner {
@@ -851,18 +883,9 @@ export class SubmoduleManagerPanel {
       margin-top: 4px;
     }
 
-    .rebase-indicator {
-      animation: pulse 2s infinite;
-    }
-
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
-    }
-
-    .card-actions .rebase-btn {
-      background: rgba(255, 165, 0, 0.1);
-      border: 1px solid var(--warning);
     }
   </style>
 </head>
@@ -877,21 +900,25 @@ export class SubmoduleManagerPanel {
     </header>
 
     <div class="stats">
-      <div class="stat-card">
+      <div class="stat-card" title="Total number of submodules configured in this repository">
         <div class="stat-label">Total Submodules</div>
         <div class="stat-value">${submodules.length}</div>
+        <div class="stat-desc">All configured submodules</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" title="Submodules on a branch with no uncommitted changes">
         <div class="stat-label">Clean</div>
         <div class="stat-value success">${submodules.filter(s => s.status === 'clean').length}</div>
+        <div class="stat-desc">On branch, no changes</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" title="Submodules with uncommitted changes (staged or unstaged files)">
         <div class="stat-label">Modified</div>
         <div class="stat-value warning">${submodules.filter(s => s.status === 'modified').length}</div>
+        <div class="stat-desc">Has uncommitted changes</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" title="Submodules that are detached (not on a branch), uninitialized, or have conflicts">
         <div class="stat-label">Needs Attention</div>
         <div class="stat-value error">${submodules.filter(s => ['uninitialized', 'conflict', 'detached'].includes(s.status)).length}</div>
+        <div class="stat-desc">Detached, uninitialized, or conflict</div>
       </div>
     </div>
 
@@ -906,8 +933,8 @@ export class SubmoduleManagerPanel {
     </div>
 
     ${submodules.length > 0 ? `
-    <div class="submodule-grid" id="submoduleGrid">
-      ${submodules.map((s, i) => this._renderSubmoduleCard(s, i)).join('')}
+    <div class="submodule-list" id="submoduleList">
+      ${submodules.map((s, i) => this._renderSubmoduleRow(s, i)).join('')}
     </div>
     ` : `
     <div class="empty-state">
@@ -1043,11 +1070,11 @@ export class SubmoduleManagerPanel {
       updateAll: () => postMessage('updateSubmodules'),
 
       selectAll: () => {
-        document.querySelectorAll('.submodule-card').forEach(card => {
-          selectedSubmodules.add(card.dataset.path);
-          const cb = card.querySelector('.card-checkbox');
+        document.querySelectorAll('.submodule-row').forEach(row => {
+          selectedSubmodules.add(row.dataset.path);
+          const cb = row.querySelector('.row-checkbox');
           if (cb) cb.checked = true;
-          card.classList.add('selected');
+          row.classList.add('selected');
         });
         saveState();
         updateSelectionUI();
@@ -1055,10 +1082,10 @@ export class SubmoduleManagerPanel {
 
       deselectAll: () => {
         selectedSubmodules.clear();
-        document.querySelectorAll('.submodule-card').forEach(card => {
-          const cb = card.querySelector('.card-checkbox');
+        document.querySelectorAll('.submodule-row').forEach(row => {
+          const cb = row.querySelector('.row-checkbox');
           if (cb) cb.checked = false;
-          card.classList.remove('selected');
+          row.classList.remove('selected');
         });
         saveState();
         updateSelectionUI();
@@ -1066,11 +1093,27 @@ export class SubmoduleManagerPanel {
 
       toggleSelection: (el) => {
         const path = el.dataset.submodule;
+        if (!path) return;
+
+        // Toggle selection state
         if (selectedSubmodules.has(path)) {
           selectedSubmodules.delete(path);
         } else {
           selectedSubmodules.add(path);
         }
+
+        // Update checkbox state directly
+        const checkbox = el.tagName === 'INPUT' ? el : el.querySelector('.row-checkbox');
+        if (checkbox) {
+          checkbox.checked = selectedSubmodules.has(path);
+        }
+
+        // Update the row's selected class
+        const row = el.closest('.submodule-row');
+        if (row) {
+          row.classList.toggle('selected', selectedSubmodules.has(path));
+        }
+
         saveState();
         updateSelectionUI();
       },
@@ -1169,26 +1212,56 @@ export class SubmoduleManagerPanel {
     };
 
     // Event delegation - handle all clicks
-    document.addEventListener('click', (e) => {
-      const target = e.target.closest('[data-action]');
-      if (target) {
-        const action = target.dataset.action;
-        if (actions[action]) {
-          actions[action](target);
+    document.body.addEventListener('click', function(e) {
+      let el = e.target;
+
+      // Special handling for checkboxes - don't prevent default, just track state
+      if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.dataset.action === 'toggleSelection') {
+        const path = el.dataset.submodule;
+        if (path) {
+          // Sync our state with checkbox state (checkbox already toggled)
+          if (el.checked) {
+            selectedSubmodules.add(path);
+          } else {
+            selectedSubmodules.delete(path);
+          }
+          const row = el.closest('.submodule-row');
+          if (row) {
+            row.classList.toggle('selected', el.checked);
+          }
+          saveState();
+          updateSelectionUI();
         }
+        return;
+      }
+
+      // Walk up the DOM tree to find element with data-action
+      while (el && el !== document.body) {
+        if (el.dataset && el.dataset.action) {
+          const action = el.dataset.action;
+          if (actions[action]) {
+            e.preventDefault();
+            actions[action](el);
+          }
+          return;
+        }
+        el = el.parentElement;
       }
     });
 
     // Handle search input
-    document.getElementById('searchInput').addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      document.querySelectorAll('.submodule-card').forEach(card => {
-        const name = card.dataset.name.toLowerCase();
-        const path = card.dataset.path.toLowerCase();
-        const visible = name.includes(query) || path.includes(query);
-        card.style.display = visible ? 'block' : 'none';
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+      searchInput.addEventListener('input', function(e) {
+        const query = (e.target.value || '').toLowerCase();
+        document.querySelectorAll('.submodule-row').forEach(function(row) {
+          const name = (row.dataset.name || '').toLowerCase();
+          const path = (row.dataset.path || '').toLowerCase();
+          const visible = name.includes(query) || path.includes(query);
+          row.style.display = visible ? 'flex' : 'none';
+        });
       });
-    });
+    }
 
     function updateSelectionUI() {
       const bar = document.getElementById('selectionBar');
@@ -1201,27 +1274,24 @@ export class SubmoduleManagerPanel {
         bar.classList.remove('active');
       }
 
-      document.querySelectorAll('.submodule-card').forEach(card => {
-        const checkbox = card.querySelector('.card-checkbox');
+      document.querySelectorAll('.submodule-row').forEach(row => {
+        const checkbox = row.querySelector('.row-checkbox');
         if (checkbox) {
-          checkbox.checked = selectedSubmodules.has(card.dataset.path);
-          card.classList.toggle('selected', selectedSubmodules.has(card.dataset.path));
+          checkbox.checked = selectedSubmodules.has(row.dataset.path);
+          row.classList.toggle('selected', selectedSubmodules.has(row.dataset.path));
         }
       });
     }
 
     function updateRebaseUI() {
-      document.querySelectorAll('.submodule-card').forEach(card => {
-        const path = card.dataset.path;
-        const rebaseIndicator = card.querySelector('.rebase-indicator');
-        const rebaseBtn = card.querySelector('.rebase-btn');
+      document.querySelectorAll('.submodule-row').forEach(row => {
+        const path = row.dataset.path;
+        const rebaseIndicator = row.querySelector('.rebase-indicator');
 
         if (rebasingSubmodules.has(path)) {
-          if (rebaseIndicator) rebaseIndicator.style.display = 'inline-flex';
-          if (rebaseBtn) rebaseBtn.textContent = '✓ Done Rebasing';
+          if (rebaseIndicator) rebaseIndicator.style.display = 'inline-block';
         } else {
           if (rebaseIndicator) rebaseIndicator.style.display = 'none';
-          if (rebaseBtn) rebaseBtn.textContent = '⏳ Mark Rebasing';
         }
       });
     }
@@ -1233,10 +1303,14 @@ export class SubmoduleManagerPanel {
       switch (message.type) {
         case 'branches':
           const branchSelect = document.getElementById('branchSelect');
-          const branches = message.payload.branches;
-          branchSelect.innerHTML = branches.map(b =>
-            \`<option value="\${b.name}" \${b.isCurrent ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}</option>\`
-          ).join('');
+          const branches = message.payload.branches || [];
+          if (branches.length === 0) {
+            branchSelect.innerHTML = '<option value="">No branches found</option>';
+          } else {
+            branchSelect.innerHTML = branches.map(b =>
+              \`<option value="\${b.name}" \${b.isCurrent ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
+            ).join('');
+          }
           break;
 
         case 'commits':
@@ -1267,7 +1341,7 @@ export class SubmoduleManagerPanel {
         case 'updateSubmodules':
           submoduleData = message.payload.submodules;
           saveState();
-          updateSubmoduleCards(submoduleData);
+          updateSubmoduleRows(submoduleData);
           break;
 
         case 'rebaseStatusUpdated':
@@ -1276,33 +1350,28 @@ export class SubmoduleManagerPanel {
       }
     });
 
-    function updateSubmoduleCards(submodules) {
+    function updateSubmoduleRows(submodules) {
       submodules.forEach(s => {
-        const card = document.querySelector(\`.submodule-card[data-path="\${s.path}"]\`);
-        if (card) {
-          const statusEl = card.querySelector('.card-status');
+        const row = document.querySelector(\`.submodule-row[data-path="\${s.path}"]\`);
+        if (row) {
+          const statusEl = row.querySelector('.row-status');
           if (statusEl) {
-            statusEl.className = 'card-status status-' + s.status;
-            statusEl.innerHTML = getStatusIcon(s.status) + ' ' + s.status;
+            statusEl.className = 'row-status status-' + s.status;
+            statusEl.innerHTML = getStatusIcon(s.status) + ' ' + s.status.toUpperCase();
           }
 
-          const branchEl = card.querySelector('.info-value.branch');
-          if (branchEl) branchEl.textContent = s.currentBranch || 'detached';
+          const branchEl = row.querySelector('.branch');
+          if (branchEl) branchEl.textContent = s.currentBranch || '(detached)';
 
-          const commitEl = card.querySelector('.info-value.commit');
+          const commitEl = row.querySelector('.commit');
           if (commitEl) commitEl.textContent = s.currentCommit || 'N/A';
 
-          const syncEl = card.querySelector('.sync-status');
+          const syncEl = row.querySelector('.row-sync');
           if (syncEl) {
-            if (s.ahead > 0 || s.behind > 0) {
-              syncEl.style.display = 'flex';
-              syncEl.innerHTML = \`
-                <span class="sync-item ahead">↑ \${s.ahead} ahead</span>
-                <span class="sync-item behind">↓ \${s.behind} behind</span>
-              \`;
-            } else {
-              syncEl.style.display = 'none';
-            }
+            let syncHtml = '';
+            if (s.ahead > 0) syncHtml += \`<span class="ahead">↑\${s.ahead}</span>\`;
+            if (s.behind > 0) syncHtml += \`<span class="behind">↓\${s.behind}</span>\`;
+            syncEl.innerHTML = syncHtml;
           }
         }
       });
@@ -1328,53 +1397,35 @@ export class SubmoduleManagerPanel {
 </html>`;
   }
 
-  private _renderSubmoduleCard(submodule: SubmoduleInfo, index: number): string {
+  private _renderSubmoduleRow(submodule: SubmoduleInfo, index: number): string {
     const statusClass = `status-${submodule.status}`;
     const statusIcon = this._getStatusIcon(submodule.status);
+    const statusTooltip = this._getStatusTooltip(submodule.status);
+    const branchDisplay = submodule.currentBranch || '(detached)';
+    const branchTooltip = submodule.currentBranch
+      ? `Currently on branch: ${submodule.currentBranch}`
+      : `Detached HEAD: Not on any branch, checked out to commit ${submodule.currentCommit}`;
 
     return `
-      <div class="submodule-card" data-name="${submodule.name}" data-path="${submodule.path}" style="animation-delay: ${index * 0.05}s">
-        <div class="card-header">
-          <div class="card-title">
-            <input type="checkbox" class="card-checkbox" data-action="toggleSelection" data-submodule="${submodule.path}">
-            <span class="card-name">${submodule.name}</span>
-            <span class="rebase-indicator" style="display: none; background: rgba(255, 165, 0, 0.2); color: var(--warning); padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-left: 8px;">⏳ REBASING</span>
-          </div>
-          <span class="card-status ${statusClass}">${statusIcon} ${submodule.status}</span>
+      <div class="submodule-row" data-name="${submodule.name}" data-path="${submodule.path}" style="animation-delay: ${index * 0.02}s">
+        <input type="checkbox" class="row-checkbox" data-action="toggleSelection" data-submodule="${submodule.path}">
+        <span class="row-name" title="${submodule.name}">${submodule.name}</span>
+        <span class="row-path" title="${submodule.path}">${submodule.path}</span>
+        <span class="row-branch branch" title="${branchTooltip}">${branchDisplay}</span>
+        <span class="row-commit commit">${submodule.currentCommit || 'N/A'}</span>
+        <span class="row-status ${statusClass}" title="${statusTooltip}">${statusIcon} ${submodule.status.toUpperCase()}</span>
+        <div class="row-sync">
+          ${submodule.ahead > 0 ? `<span class="ahead">↑${submodule.ahead}</span>` : ''}
+          ${submodule.behind > 0 ? `<span class="behind">↓${submodule.behind}</span>` : ''}
         </div>
-        <div class="card-body">
-          <div class="card-info">
-            <div class="info-item">
-              <span class="info-label">Branch</span>
-              <span class="info-value branch">${submodule.currentBranch || 'detached'}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Commit</span>
-              <span class="info-value commit">${submodule.currentCommit || 'N/A'}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Path</span>
-              <span class="info-value">${submodule.path}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Config Branch</span>
-              <span class="info-value">${submodule.branch || 'main'}</span>
-            </div>
-          </div>
-          <div class="sync-status" style="${(submodule.ahead > 0 || submodule.behind > 0) ? '' : 'display: none'}">
-            <span class="sync-item ahead">↑ ${submodule.ahead} ahead</span>
-            <span class="sync-item behind">↓ ${submodule.behind} behind</span>
-          </div>
-          <div class="card-actions">
-            <button class="btn btn-sm" data-action="openCheckoutModal" data-submodule="${submodule.path}" title="Checkout branch">⎇ Branch</button>
-            <button class="btn btn-sm" data-action="openCommitModal" data-submodule="${submodule.path}" title="Checkout specific commit">⎔ Commit</button>
-            <button class="btn btn-sm" data-action="pullChanges" data-submodule="${submodule.path}" title="Pull changes">↓ Pull</button>
-            <button class="btn btn-sm" data-action="pushChanges" data-submodule="${submodule.path}" title="Push changes">↑ Push</button>
-            <button class="btn btn-sm" data-action="createPR" data-submodule="${submodule.path}" title="Create PR">⇅ PR</button>
-            <button class="btn btn-sm" data-action="openSubmodule" data-submodule="${submodule.path}" title="Open in explorer">📂</button>
-            ${submodule.hasChanges ? `<button class="btn btn-sm" data-action="stageSubmodule" data-submodule="${submodule.path}" title="Stage submodule pointer">+ Stage</button>` : ''}
-            <button class="btn btn-sm rebase-btn" data-action="toggleRebaseStatus" data-submodule="${submodule.path}" title="Mark as rebasing to prevent accidental updates">⏳ Mark Rebasing</button>
-          </div>
+        <span class="rebase-badge rebase-indicator" style="display: none;">REBASING</span>
+        <div class="row-actions">
+          <button class="btn btn-sm" data-action="openCheckoutModal" data-submodule="${submodule.path}" title="Checkout branch">⎇</button>
+          <button class="btn btn-sm" data-action="openCommitModal" data-submodule="${submodule.path}" title="Checkout specific commit">⎔</button>
+          <button class="btn btn-sm" data-action="pullChanges" data-submodule="${submodule.path}" title="Pull changes">↓</button>
+          <button class="btn btn-sm" data-action="pushChanges" data-submodule="${submodule.path}" title="Push changes">↑</button>
+          <button class="btn btn-sm" data-action="openSubmodule" data-submodule="${submodule.path}" title="Open in explorer">📂</button>
+          ${submodule.hasChanges ? `<button class="btn btn-sm" data-action="stageSubmodule" data-submodule="${submodule.path}" title="Stage submodule pointer">+</button>` : ''}
         </div>
       </div>
     `;
@@ -1390,6 +1441,18 @@ export class SubmoduleManagerPanel {
       'unknown': '?'
     };
     return icons[status] || '?';
+  }
+
+  private _getStatusTooltip(status: string): string {
+    const tooltips: Record<string, string> = {
+      'clean': 'Clean: On a branch with no uncommitted changes',
+      'modified': 'Modified: Has uncommitted changes inside the submodule',
+      'uninitialized': 'Uninitialized: Submodule has not been cloned yet. Run Init All to initialize.',
+      'detached': 'Detached HEAD: Checked out to a specific commit, not on any branch. This is normal when synced to the parent repo\'s recorded commit.',
+      'conflict': 'Conflict: Merge conflict detected',
+      'unknown': 'Unknown: Could not determine status'
+    };
+    return tooltips[status] || 'Unknown status';
   }
 
   public dispose() {

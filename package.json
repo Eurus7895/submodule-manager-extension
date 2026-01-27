@@ -96,7 +96,7 @@
         {
           "id": "submodule-manager",
           "title": "Submodule Manager",
-          "icon": "$(git-submodule)"
+          "icon": "resources/icon.svg"
         }
       ]
     },
@@ -105,7 +105,7 @@
         {
           "id": "submoduleList",
           "name": "Submodules",
-          "icon": "$(git-submodule)",
+          "icon": "$(source-control)",
           "contextualTitle": "Submodule Manager"
         },
         {
@@ -231,9 +231,10 @@
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/vsce": "^2.0.0",
     "eslint": "^8.0.0",
-    "typescript": "^5.0.0",
-    "@vscode/vsce": "^2.0.0"
+    "sharp": "^0.34.5",
+    "typescript": "^5.0.0"
   },
   "dependencies": {
     "simple-git": "^3.20.0"

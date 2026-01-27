@@ -27,18 +27,22 @@ export class GitOperations {
   /**
    * Execute a git command and return the output
    */
-  private async execGit(args: string[], cwd?: string): Promise<string> {
+  private async execGit(args: string[], cwd?: string, timeoutMs: number = 30000): Promise<string> {
     const workDir = cwd || this.workspaceRoot;
     const command = `git ${args.join(' ')}`;
 
     try {
       const { stdout } = await execAsync(command, {
         cwd: workDir,
-        maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+        timeout: timeoutMs
       });
       return stdout.trim();
     } catch (error: unknown) {
-      const err = error as { stderr?: string; message?: string };
+      const err = error as { stderr?: string; message?: string; killed?: boolean };
+      if (err.killed) {
+        throw new Error(`Git command timed out after ${timeoutMs}ms`);
+      }
       throw new Error(err.stderr || err.message || 'Git command failed');
     }
   }
@@ -170,21 +174,30 @@ export class GitOperations {
       try {
         currentBranch = await this.execGit(['rev-parse', '--abbrev-ref', 'HEAD'], fullPath);
         if (currentBranch === 'HEAD') {
+          // Detached HEAD - show empty branch so UI can display "(detached)"
+          currentBranch = '';
           status = 'detached';
         }
       } catch {
+        currentBranch = '';
         status = 'detached';
       }
 
-      // Check for changes
+      // Check for changes inside the submodule (uncommitted files)
       const statusOutput = await this.execGit(['status', '--porcelain'], fullPath);
-      hasChanges = statusOutput.length > 0;
+      // Trim whitespace and check if there are actual changes
+      hasChanges = statusOutput.trim().length > 0;
 
+      // Determine final status
+      // - 'modified': has uncommitted changes inside the submodule
+      // - 'detached': checked out to a specific commit (not on a branch), but clean
+      // - 'clean': on a branch with no uncommitted changes
       if (hasChanges) {
         status = 'modified';
       } else if (status !== 'detached') {
         status = 'clean';
       }
+      // If detached and no changes, keep status as 'detached'
 
       // Get ahead/behind counts
       if (currentBranch && currentBranch !== 'HEAD') {
@@ -247,48 +260,53 @@ export class GitOperations {
   }
 
   /**
-   * Get branches for a submodule
+   * Get branches for a submodule (fast - single git command, no network calls)
    */
   async getBranches(submodulePath: string): Promise<BranchInfo[]> {
     const fullPath = path.join(this.workspaceRoot, submodulePath);
     const branches: BranchInfo[] = [];
 
     try {
-      // Fetch to get latest remote branches
-      await this.execGit(['fetch', '--all'], fullPath);
+      // Use simple git branch -a command (most compatible) with 5s timeout
+      const output = await this.execGit(['branch', '-a'], fullPath, 5000);
+      const seenNames = new Set<string>();
 
-      // Get current branch
-      let currentBranch = '';
-      try {
-        currentBranch = await this.execGit(['rev-parse', '--abbrev-ref', 'HEAD'], fullPath);
-      } catch {
-        // Detached HEAD
-      }
-
-      // Get all branches
-      const output = await this.execGit(
-        ['branch', '-a', '--format=%(refname:short)|%(objectname:short)|%(committerdate:iso)'],
-        fullPath
-      );
-
-      for (const line of output.split('\n').filter(l => l.trim())) {
-        const [name, commit, dateStr] = line.split('|');
-        const isRemote = name.startsWith('origin/');
-        const cleanName = isRemote ? name.replace('origin/', '') : name;
-
-        // Skip HEAD reference
-        if (cleanName === 'HEAD' || name === 'origin/HEAD') {
+      for (const line of output.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.includes('HEAD')) {
           continue;
         }
+
+        const isCurrent = trimmed.startsWith('*');
+        const branchName = trimmed.replace(/^\*\s*/, '').trim();
+
+        // Check if remote branch
+        const isRemote = branchName.startsWith('remotes/origin/') || branchName.startsWith('origin/');
+        const cleanName = branchName
+          .replace(/^remotes\/origin\//, '')
+          .replace(/^origin\//, '');
+
+        // Skip duplicates (prefer local over remote)
+        if (seenNames.has(cleanName)) {
+          continue;
+        }
+        seenNames.add(cleanName);
 
         branches.push({
           name: cleanName,
           isRemote,
-          isCurrent: cleanName === currentBranch,
-          commit,
-          lastCommitDate: dateStr ? new Date(dateStr) : undefined
+          isCurrent: isCurrent && !isRemote,
+          commit: ''
         });
       }
+
+      // Sort: current first, then alphabetically
+      branches.sort((a, b) => {
+        if (a.isCurrent) return -1;
+        if (b.isCurrent) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
     } catch (error) {
       console.error('Error getting branches:', error);
     }
@@ -478,7 +496,7 @@ export class GitOperations {
   }
 
   /**
-   * Sync submodules to their configured branches
+   * Sync submodules to their recorded commits in the parent repository
    * @param submodulePaths Optional list of submodule paths to sync. If not provided, syncs all.
    */
   async syncAllSubmodules(submodulePaths?: string[]): Promise<Map<string, CommandResult>> {
@@ -491,9 +509,18 @@ export class GitOperations {
         continue;
       }
 
-      if (submodule.branch) {
-        const result = await this.syncSubmodule(submodule.path, submodule.branch);
+      // Get the recorded commit from the parent repository
+      const recordedCommit = await this.getRecordedCommit(submodule.path);
+
+      if (recordedCommit) {
+        // Sync to the recorded commit, not the branch
+        const result = await this.syncSubmodule(submodule.path, recordedCommit);
         results.set(submodule.path, result);
+      } else {
+        results.set(submodule.path, {
+          success: false,
+          message: `No recorded commit found for '${submodule.path}'`
+        });
       }
     }
 
