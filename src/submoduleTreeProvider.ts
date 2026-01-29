@@ -114,19 +114,22 @@ export class SubmoduleTreeProvider implements vscode.TreeDataProvider<SubmoduleT
     try {
       const branches = await this.gitOps.getBranches(submodule.path);
 
-      return branches
-        .filter(b => !b.isRemote) // Only local branches
-        .map(branch => {
-          const item = new SubmoduleTreeItem(
-            branch.name + (branch.isCurrent ? ' (current)' : ''),
-            submodule,
-            vscode.TreeItemCollapsibleState.None,
-            'branch-item',
-            branch.name,
-            branch.isCurrent
-          );
-          return item;
-        });
+      // Show all branches (local and remote) so user can checkout any
+      return branches.map(branch => {
+        const label = branch.name +
+          (branch.isCurrent ? ' (current)' : '') +
+          (branch.isRemote ? ' (remote)' : '');
+        const item = new SubmoduleTreeItem(
+          label,
+          submodule,
+          vscode.TreeItemCollapsibleState.None,
+          'branch-item',
+          branch.name,
+          branch.isCurrent,
+          branch.isRemote
+        );
+        return item;
+      });
     } catch {
       return [new SubmoduleTreeItem(
         'Failed to load branches',
@@ -166,7 +169,8 @@ export class SubmoduleTreeItem extends vscode.TreeItem {
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,
     public readonly itemType: 'submodule' | 'branch' | 'commit' | 'status' | 'sync' | 'branches' | 'branch-item' = 'submodule',
     public readonly branchName?: string,
-    public readonly isCurrent?: boolean
+    public readonly isCurrent?: boolean,
+    public readonly isRemote?: boolean
   ) {
     super(label, collapsibleState);
 
@@ -177,10 +181,14 @@ export class SubmoduleTreeItem extends vscode.TreeItem {
       this.description = this.getDescription();
     } else if (itemType === 'branch-item') {
       this.contextValue = 'branchItem';
-      this.iconPath = this.isCurrent
-        ? new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'))
-        : new vscode.ThemeIcon('git-branch');
-      this.tooltip = `Click to checkout branch: ${this.branchName}`;
+      if (this.isCurrent) {
+        this.iconPath = new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'));
+      } else if (this.isRemote) {
+        this.iconPath = new vscode.ThemeIcon('cloud', new vscode.ThemeColor('gitDecoration.untrackedResourceForeground'));
+      } else {
+        this.iconPath = new vscode.ThemeIcon('git-branch');
+      }
+      this.tooltip = `Click to checkout branch: ${this.branchName}${this.isRemote ? ' (will create local tracking branch)' : ''}`;
       this.command = {
         title: 'Checkout Branch',
         command: 'submoduleManager.checkoutBranchFromTree',

@@ -287,7 +287,8 @@ export class SubmoduleManagerPanel {
       this._panel.webview.postMessage({
         type: 'baseBranchesForCreate',
         payload: {
-          branches: branches.filter(b => !b.isRemote), // Only local branches
+          // Show all branches (local and remote) so user can choose any as base
+          branches: branches,
           currentBranch: currentBranchName
         }
       });
@@ -296,7 +297,7 @@ export class SubmoduleManagerPanel {
       this._panel.webview.postMessage({
         type: 'baseBranchesForCreate',
         payload: {
-          branches: [{ name: 'main', isCurrent: true, isRemote: false }],
+          branches: [{ name: 'main', isCurrent: false, isRemote: false }],
           currentBranch: 'main'
         }
       });
@@ -743,6 +744,16 @@ export class SubmoduleManagerPanel {
     .branch-item.current {
       border-color: var(--success);
       background: rgba(40, 167, 69, 0.1);
+    }
+
+    .branch-item.remote {
+      border-color: var(--info);
+      background: rgba(0, 123, 255, 0.05);
+      font-style: italic;
+    }
+
+    .branch-item.remote:hover {
+      background: rgba(0, 123, 255, 0.1);
     }
 
     .branch-item .branch-icon {
@@ -1624,14 +1635,14 @@ export class SubmoduleManagerPanel {
             const panelId = 'branches-' + branchSubmodule.replace(/[\\/.]/g, '-');
             const panel = document.getElementById(panelId);
             if (panel && panel.style.display !== 'none') {
-              const localBranches = branches.filter(b => !b.isRemote);
-              if (localBranches.length === 0) {
-                panel.innerHTML = '<div class="branches-loading">No local branches found</div>';
+              // Show all branches (local and remote) so user can checkout any
+              if (branches.length === 0) {
+                panel.innerHTML = '<div class="branches-loading">No branches found</div>';
               } else {
-                panel.innerHTML = '<div class="branches-list">' + localBranches.map(b =>
-                  \`<span class="branch-item \${b.isCurrent ? 'current' : ''}" data-action="checkoutBranchInline" data-submodule="\${branchSubmodule}" data-branch="\${b.name}">
-                    <span class="branch-icon">\${b.isCurrent ? '✓' : '⎇'}</span>
-                    \${b.name}
+                panel.innerHTML = '<div class="branches-list">' + branches.map(b =>
+                  \`<span class="branch-item \${b.isCurrent ? 'current' : ''} \${b.isRemote ? 'remote' : ''}" data-action="checkoutBranchInline" data-submodule="\${branchSubmodule}" data-branch="\${b.name}">
+                    <span class="branch-icon">\${b.isCurrent ? '✓' : (b.isRemote ? '☁' : '⎇')}</span>
+                    \${b.name}\${b.isRemote ? ' (remote)' : ''}
                   </span>\`
                 ).join('') + '</div>';
               }
@@ -1697,7 +1708,7 @@ export class SubmoduleManagerPanel {
             baseBranchSelect.innerHTML = '<option value="main">main</option>';
           } else {
             baseBranchSelect.innerHTML = availableBranches.map(b =>
-              \`<option value="\${b.name}" \${b.name === currentBranchName ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}</option>\`
+              \`<option value="\${b.name}" \${b.name === currentBranchName ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
             ).join('');
           }
           updatePrefixOptions();
