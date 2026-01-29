@@ -430,6 +430,25 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     })
   );
 
+  // Checkout branch from tree view (direct click on branch item)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('submoduleManager.checkoutBranchFromTree', async (submodulePath: string, branchName: string) => {
+      if (!submodulePath || !branchName) {
+        return;
+      }
+
+      const result = await gitOps.checkoutBranch(submodulePath, branchName);
+
+      if (result.success) {
+        vscode.window.showInformationMessage(result.message);
+      } else {
+        vscode.window.showErrorMessage(result.message);
+      }
+
+      submoduleTreeProvider.refresh();
+    })
+  );
+
   // Pull changes command
   context.subscriptions.push(
     vscode.commands.registerCommand('submoduleManager.pullChanges', async (item) => {
