@@ -680,26 +680,73 @@ export class SubmoduleManagerPanel {
       width: 100%;
     }
 
-    .submodule-row {
-      display: flex;
-      align-items: center;
+    .submodule-card {
       background: var(--bg-secondary);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 12px 16px;
-      gap: 16px;
       transition: all 0.2s ease;
     }
 
-    .submodule-row:hover {
+    .submodule-card:hover {
       border-color: var(--accent);
-      background: var(--bg-tertiary);
     }
 
-    .submodule-row.selected {
+    .submodule-card.selected {
       border-color: var(--accent);
       border-width: 2px;
-      background: rgba(var(--accent), 0.05);
+    }
+
+    .submodule-row {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      gap: 16px;
+    }
+
+    .branches-panel {
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-radius: 0 0 6px 6px;
+    }
+
+    .branches-loading {
+      color: var(--text-secondary);
+      font-size: 12px;
+      padding: 8px 0;
+    }
+
+    .branches-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .branch-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .branch-item:hover {
+      border-color: var(--accent);
+      background: var(--bg-primary);
+    }
+
+    .branch-item.current {
+      border-color: var(--success);
+      background: rgba(40, 167, 69, 0.1);
+    }
+
+    .branch-item .branch-icon {
+      font-size: 10px;
     }
 
     .row-checkbox {
@@ -959,7 +1006,7 @@ export class SubmoduleManagerPanel {
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .submodule-row {
+    .submodule-card {
       animation: fadeIn 0.2s ease forwards;
     }
 
@@ -1256,7 +1303,7 @@ export class SubmoduleManagerPanel {
       updateAll: () => postMessage('updateSubmodules'),
 
       selectAll: () => {
-        document.querySelectorAll('.submodule-row').forEach(row => {
+        document.querySelectorAll('.submodule-card').forEach(row => {
           selectedSubmodules.add(row.dataset.path);
           const cb = row.querySelector('.row-checkbox');
           if (cb) cb.checked = true;
@@ -1268,7 +1315,7 @@ export class SubmoduleManagerPanel {
 
       deselectAll: () => {
         selectedSubmodules.clear();
-        document.querySelectorAll('.submodule-row').forEach(row => {
+        document.querySelectorAll('.submodule-card').forEach(row => {
           const cb = row.querySelector('.row-checkbox');
           if (cb) cb.checked = false;
           row.classList.remove('selected');
@@ -1295,7 +1342,7 @@ export class SubmoduleManagerPanel {
         }
 
         // Update the row's selected class
-        const row = el.closest('.submodule-row');
+        const row = el.closest('.submodule-card');
         if (row) {
           row.classList.toggle('selected', selectedSubmodules.has(path));
         }
@@ -1440,7 +1487,30 @@ export class SubmoduleManagerPanel {
       createPR: (el) => postMessage('createPR', { submodule: el.dataset.submodule }),
       openSubmodule: (el) => postMessage('openSubmodule', { submodule: el.dataset.submodule }),
       stageSubmodule: (el) => postMessage('stageSubmodule', { submodule: el.dataset.submodule }),
-      syncSelected: () => postMessage('syncVersions', { submodules: Array.from(selectedSubmodules) })
+      syncSelected: () => postMessage('syncVersions', { submodules: Array.from(selectedSubmodules) }),
+
+      toggleBranches: (el) => {
+        const submodule = el.dataset.submodule;
+        const panelId = 'branches-' + submodule.replace(/[\\/.]/g, '-');
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+
+        if (panel.style.display === 'none') {
+          panel.style.display = 'block';
+          panel.innerHTML = '<div class="branches-loading">Loading branches...</div>';
+          postMessage('getBranches', { submodule });
+        } else {
+          panel.style.display = 'none';
+        }
+      },
+
+      checkoutBranchInline: (el) => {
+        const submodule = el.dataset.submodule;
+        const branch = el.dataset.branch;
+        if (submodule && branch) {
+          postMessage('checkoutBranch', { submodule, branch });
+        }
+      }
     };
 
     // Event delegation - handle all clicks
@@ -1457,7 +1527,7 @@ export class SubmoduleManagerPanel {
           } else {
             selectedSubmodules.delete(path);
           }
-          const row = el.closest('.submodule-row');
+          const row = el.closest('.submodule-card');
           if (row) {
             row.classList.toggle('selected', el.checked);
           }
@@ -1486,7 +1556,7 @@ export class SubmoduleManagerPanel {
     if (searchInput) {
       searchInput.addEventListener('input', function(e) {
         const query = (e.target.value || '').toLowerCase();
-        document.querySelectorAll('.submodule-row').forEach(function(row) {
+        document.querySelectorAll('.submodule-card').forEach(function(row) {
           const name = (row.dataset.name || '').toLowerCase();
           const path = (row.dataset.path || '').toLowerCase();
           const visible = name.includes(query) || path.includes(query);
@@ -1506,7 +1576,7 @@ export class SubmoduleManagerPanel {
         bar.classList.remove('active');
       }
 
-      document.querySelectorAll('.submodule-row').forEach(row => {
+      document.querySelectorAll('.submodule-card').forEach(row => {
         const checkbox = row.querySelector('.row-checkbox');
         if (checkbox) {
           checkbox.checked = selectedSubmodules.has(row.dataset.path);
@@ -1516,7 +1586,7 @@ export class SubmoduleManagerPanel {
     }
 
     function updateRebaseUI() {
-      document.querySelectorAll('.submodule-row').forEach(row => {
+      document.querySelectorAll('.submodule-card').forEach(row => {
         const path = row.dataset.path;
         const rebaseIndicator = row.querySelector('.rebase-indicator');
 
@@ -1536,12 +1606,36 @@ export class SubmoduleManagerPanel {
         case 'branches':
           const branchSelect = document.getElementById('branchSelect');
           const branches = message.payload.branches || [];
-          if (branches.length === 0) {
-            branchSelect.innerHTML = '<option value="">No branches found</option>';
-          } else {
-            branchSelect.innerHTML = branches.map(b =>
-              \`<option value="\${b.name}" \${b.isCurrent ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
-            ).join('');
+          const branchSubmodule = message.payload.submodule;
+
+          // Update checkout modal if open
+          if (branchSelect) {
+            if (branches.length === 0) {
+              branchSelect.innerHTML = '<option value="">No branches found</option>';
+            } else {
+              branchSelect.innerHTML = branches.map(b =>
+                \`<option value="\${b.name}" \${b.isCurrent ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
+              ).join('');
+            }
+          }
+
+          // Update inline branches panel if exists
+          if (branchSubmodule) {
+            const panelId = 'branches-' + branchSubmodule.replace(/[\\/.]/g, '-');
+            const panel = document.getElementById(panelId);
+            if (panel && panel.style.display !== 'none') {
+              const localBranches = branches.filter(b => !b.isRemote);
+              if (localBranches.length === 0) {
+                panel.innerHTML = '<div class="branches-loading">No local branches found</div>';
+              } else {
+                panel.innerHTML = '<div class="branches-list">' + localBranches.map(b =>
+                  \`<span class="branch-item \${b.isCurrent ? 'current' : ''}" data-action="checkoutBranchInline" data-submodule="\${branchSubmodule}" data-branch="\${b.name}">
+                    <span class="branch-icon">\${b.isCurrent ? '✓' : '⎇'}</span>
+                    \${b.name}
+                  </span>\`
+                ).join('') + '</div>';
+              }
+            }
           }
           break;
 
@@ -1613,7 +1707,7 @@ export class SubmoduleManagerPanel {
 
     function updateSubmoduleRows(submodules) {
       submodules.forEach(s => {
-        const row = document.querySelector(\`.submodule-row[data-path="\${s.path}"]\`);
+        const row = document.querySelector(\`.submodule-card[data-path="\${s.path}"]\`);
         if (row) {
           const statusEl = row.querySelector('.row-status');
           if (statusEl) {
@@ -1836,25 +1930,30 @@ export class SubmoduleManagerPanel {
       : `Detached HEAD: Not on any branch, checked out to commit ${submodule.currentCommit}`;
 
     return `
-      <div class="submodule-row" data-name="${submodule.name}" data-path="${submodule.path}" style="animation-delay: ${index * 0.02}s">
-        <input type="checkbox" class="row-checkbox" data-action="toggleSelection" data-submodule="${submodule.path}">
-        <span class="row-name" title="${submodule.name}">${submodule.name}</span>
-        <span class="row-path" title="${submodule.path}">${submodule.path}</span>
-        <span class="row-branch branch" title="${branchTooltip}">${branchDisplay}</span>
-        <span class="row-commit commit">${submodule.currentCommit || 'N/A'}</span>
-        <span class="row-status ${statusClass}" title="${statusTooltip}">${statusIcon} ${submodule.status.toUpperCase()}</span>
-        <div class="row-sync">
-          ${submodule.ahead > 0 ? `<span class="ahead">↑${submodule.ahead}</span>` : ''}
-          ${submodule.behind > 0 ? `<span class="behind">↓${submodule.behind}</span>` : ''}
+      <div class="submodule-card" data-name="${submodule.name}" data-path="${submodule.path}" style="animation-delay: ${index * 0.02}s">
+        <div class="submodule-row">
+          <input type="checkbox" class="row-checkbox" data-action="toggleSelection" data-submodule="${submodule.path}">
+          <span class="row-name" title="${submodule.name}">${submodule.name}</span>
+          <span class="row-path" title="${submodule.path}">${submodule.path}</span>
+          <span class="row-branch branch" title="${branchTooltip}">${branchDisplay}</span>
+          <span class="row-commit commit">${submodule.currentCommit || 'N/A'}</span>
+          <span class="row-status ${statusClass}" title="${statusTooltip}">${statusIcon} ${submodule.status.toUpperCase()}</span>
+          <div class="row-sync">
+            ${submodule.ahead > 0 ? `<span class="ahead">↑${submodule.ahead}</span>` : ''}
+            ${submodule.behind > 0 ? `<span class="behind">↓${submodule.behind}</span>` : ''}
+          </div>
+          <span class="rebase-badge rebase-indicator" style="display: none;">REBASING</span>
+          <div class="row-actions">
+            <button class="btn btn-sm" data-action="toggleBranches" data-submodule="${submodule.path}" title="Show branches">⎇</button>
+            <button class="btn btn-sm" data-action="openCommitModal" data-submodule="${submodule.path}" title="Checkout specific commit">⎔</button>
+            <button class="btn btn-sm" data-action="pullChanges" data-submodule="${submodule.path}" title="Pull changes">↓</button>
+            <button class="btn btn-sm" data-action="pushChanges" data-submodule="${submodule.path}" title="Push changes">↑</button>
+            <button class="btn btn-sm" data-action="openSubmodule" data-submodule="${submodule.path}" title="Open in explorer">📂</button>
+            ${submodule.hasChanges ? `<button class="btn btn-sm" data-action="stageSubmodule" data-submodule="${submodule.path}" title="Stage submodule pointer">+</button>` : ''}
+          </div>
         </div>
-        <span class="rebase-badge rebase-indicator" style="display: none;">REBASING</span>
-        <div class="row-actions">
-          <button class="btn btn-sm" data-action="openCheckoutModal" data-submodule="${submodule.path}" title="Checkout branch">⎇</button>
-          <button class="btn btn-sm" data-action="openCommitModal" data-submodule="${submodule.path}" title="Checkout specific commit">⎔</button>
-          <button class="btn btn-sm" data-action="pullChanges" data-submodule="${submodule.path}" title="Pull changes">↓</button>
-          <button class="btn btn-sm" data-action="pushChanges" data-submodule="${submodule.path}" title="Push changes">↑</button>
-          <button class="btn btn-sm" data-action="openSubmodule" data-submodule="${submodule.path}" title="Open in explorer">📂</button>
-          ${submodule.hasChanges ? `<button class="btn btn-sm" data-action="stageSubmodule" data-submodule="${submodule.path}" title="Stage submodule pointer">+</button>` : ''}
+        <div class="branches-panel" id="branches-${submodule.path.replace(/[/.]/g, '-')}" style="display: none;">
+          <div class="branches-loading">Loading branches...</div>
         </div>
       </div>
     `;
