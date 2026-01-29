@@ -961,8 +961,33 @@ export class SubmoduleManagerPanel {
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label">Branch Name</label>
-          <input type="text" class="form-input" id="branchName" placeholder="feature/my-new-feature">
+          <label class="form-label">Branch Prefix</label>
+          <select class="form-select" id="branchPrefix">
+            <option value="feature">feature/</option>
+            <option value="task">task/</option>
+            <option value="release">Release/</option>
+          </select>
+        </div>
+        <div class="form-group" id="ticketIdGroup">
+          <label class="form-label">Ticket ID (optional)</label>
+          <input type="text" class="form-input" id="ticketId" placeholder="e.g., ECPT-15474">
+        </div>
+        <div class="form-group" id="taskTitleGroup">
+          <label class="form-label">Task Title</label>
+          <input type="text" class="form-input" id="taskTitle" placeholder="e.g., Design and Implement XML Parser Abstraction Class">
+        </div>
+        <div class="form-group" id="releaseInfoGroup" style="display: none;">
+          <label class="form-label">Product Name</label>
+          <input type="text" class="form-input" id="productName" placeholder="e.g., HexOGen">
+          <label class="form-label" style="margin-top: 12px;">Version</label>
+          <input type="text" class="form-input" id="releaseVersion" placeholder="e.g., 10.54.0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Generated Branch Name</label>
+          <div id="branchPreview" style="padding: 10px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; font-family: var(--vscode-editor-font-family); word-break: break-all; min-height: 20px; color: var(--text-secondary);">
+            feature/your-branch-name
+          </div>
+          <input type="hidden" id="branchName">
         </div>
         <div class="form-group">
           <label class="form-label">Base Branch</label>
@@ -1119,6 +1144,14 @@ export class SubmoduleManagerPanel {
       },
 
       openCreateBranchModal: () => {
+        // Reset form fields
+        document.getElementById('branchPrefix').value = 'feature';
+        document.getElementById('ticketId').value = '';
+        document.getElementById('taskTitle').value = '';
+        document.getElementById('productName').value = '';
+        document.getElementById('releaseVersion').value = '';
+        document.getElementById('baseBranch').value = 'main';
+        toggleBranchFormFields();
         document.getElementById('createBranchModal').classList.add('active');
       },
 
@@ -1130,11 +1163,23 @@ export class SubmoduleManagerPanel {
       createBranch: () => {
         const branchName = document.getElementById('branchName').value.trim();
         const baseBranch = document.getElementById('baseBranch').value.trim() || 'main';
-        if (!branchName) return;
+
+        // Validate branch name
+        if (!branchName ||
+            branchName.includes('your-branch-name') ||
+            branchName.endsWith('-') ||
+            branchName.endsWith('_') ||
+            branchName.includes('x.x.x')) {
+          alert('Please fill in all required fields to generate a valid branch name.');
+          return;
+        }
 
         const checkboxes = document.querySelectorAll('.branch-submodule:checked');
         const submodules = Array.from(checkboxes).map(cb => cb.value);
-        if (submodules.length === 0) return;
+        if (submodules.length === 0) {
+          alert('Please select at least one submodule.');
+          return;
+        }
 
         postMessage('createBranch', { submodules, branchName, baseBranch });
         document.getElementById('createBranchModal').classList.remove('active');
@@ -1142,6 +1187,15 @@ export class SubmoduleManagerPanel {
 
       createBranchForSelected: () => {
         if (selectedSubmodules.size === 0) return;
+        // Reset form fields
+        document.getElementById('branchPrefix').value = 'feature';
+        document.getElementById('ticketId').value = '';
+        document.getElementById('taskTitle').value = '';
+        document.getElementById('productName').value = '';
+        document.getElementById('releaseVersion').value = '';
+        document.getElementById('baseBranch').value = 'main';
+        toggleBranchFormFields();
+        // Set selected submodules
         document.querySelectorAll('.branch-submodule').forEach(cb => {
           cb.checked = selectedSubmodules.has(cb.value);
         });
@@ -1388,6 +1442,81 @@ export class SubmoduleManagerPanel {
       };
       return icons[status] || '?';
     }
+
+    // Branch naming tool functions
+    function toKebabCase(str) {
+      return str
+        .toLowerCase()
+        .replace(/[^a-z0-9\\s-]/g, '') // Remove special characters except spaces and hyphens
+        .replace(/\\s+/g, '-')          // Replace spaces with hyphens
+        .replace(/-+/g, '-')            // Replace multiple hyphens with single hyphen
+        .replace(/^-|-$/g, '');         // Remove leading/trailing hyphens
+    }
+
+    function updateBranchPreview() {
+      const prefix = document.getElementById('branchPrefix').value;
+      const preview = document.getElementById('branchPreview');
+      const branchNameInput = document.getElementById('branchName');
+      let branchName = '';
+
+      if (prefix === 'release') {
+        const productName = document.getElementById('productName').value.trim();
+        const version = document.getElementById('releaseVersion').value.trim();
+        if (productName && version) {
+          branchName = 'Release/' + productName + '_' + version;
+        } else if (productName) {
+          branchName = 'Release/' + productName + '_';
+        } else {
+          branchName = 'Release/ProductName_x.x.x';
+        }
+      } else {
+        const ticketId = document.getElementById('ticketId').value.trim();
+        const taskTitle = document.getElementById('taskTitle').value.trim();
+        const kebabTitle = toKebabCase(taskTitle);
+
+        const prefixStr = prefix + '/';
+        if (ticketId && kebabTitle) {
+          branchName = prefixStr + ticketId + '-' + kebabTitle;
+        } else if (ticketId) {
+          branchName = prefixStr + ticketId + '-';
+        } else if (kebabTitle) {
+          branchName = prefixStr + kebabTitle;
+        } else {
+          branchName = prefixStr + 'your-branch-name';
+        }
+      }
+
+      preview.textContent = branchName;
+      preview.style.color = (branchName.includes('your-branch-name') || branchName.endsWith('_') || branchName.endsWith('-') || branchName.endsWith('x.x.x'))
+        ? 'var(--text-secondary)'
+        : 'var(--text-primary)';
+      branchNameInput.value = branchName;
+    }
+
+    function toggleBranchFormFields() {
+      const prefix = document.getElementById('branchPrefix').value;
+      const ticketIdGroup = document.getElementById('ticketIdGroup');
+      const taskTitleGroup = document.getElementById('taskTitleGroup');
+      const releaseInfoGroup = document.getElementById('releaseInfoGroup');
+
+      if (prefix === 'release') {
+        ticketIdGroup.style.display = 'none';
+        taskTitleGroup.style.display = 'none';
+        releaseInfoGroup.style.display = 'block';
+      } else {
+        ticketIdGroup.style.display = 'block';
+        taskTitleGroup.style.display = 'block';
+        releaseInfoGroup.style.display = 'none';
+      }
+      updateBranchPreview();
+    }
+
+    // Event listeners for branch naming inputs
+    document.getElementById('branchPrefix').addEventListener('change', toggleBranchFormFields);
+    document.getElementById('ticketId').addEventListener('input', updateBranchPreview);
+    document.getElementById('taskTitle').addEventListener('input', updateBranchPreview);
+    document.getElementById('productName').addEventListener('input', updateBranchPreview);
+    document.getElementById('releaseVersion').addEventListener('input', updateBranchPreview);
 
     // Initialize UI on load
     updateSelectionUI();
