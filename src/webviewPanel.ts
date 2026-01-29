@@ -110,6 +110,21 @@ export class SubmoduleManagerPanel {
         });
         break;
 
+      case 'createBranchWithReview':
+        await this._createBranchWithReview(message.payload as {
+          submodules: string[];
+          branchName: string;
+          baseBranch: string;
+        });
+        break;
+
+      case 'pushCreatedBranches':
+        await this._pushCreatedBranches(message.payload as {
+          submodules: string[];
+          branchName: string;
+        });
+        break;
+
       case 'checkoutBranch':
         await this._checkoutBranch(message.payload as {
           submodule: string;
@@ -217,6 +232,84 @@ export class SubmoduleManagerPanel {
         `Branch created in ${successCount} submodule(s), failed in ${failCount}`
       );
     }
+
+    await this.refresh();
+  }
+
+  private async _createBranchWithReview(payload: {
+    submodules: string[];
+    branchName: string;
+    baseBranch: string;
+  }) {
+    const results = await this._gitOps.createBranchAcrossSubmodules(
+      payload.submodules,
+      payload.branchName,
+      payload.baseBranch,
+      true
+    );
+
+    // Convert results map to array for sending to webview
+    const resultsArray: Array<{ submodule: string; success: boolean; message: string }> = [];
+    results.forEach((result, submodulePath) => {
+      resultsArray.push({
+        submodule: submodulePath,
+        success: result.success,
+        message: result.message
+      });
+    });
+
+    // Send results to webview for review
+    this._panel.webview.postMessage({
+      type: 'branchCreationResults',
+      payload: {
+        branchName: payload.branchName,
+        results: resultsArray
+      }
+    });
+
+    await this.refresh();
+  }
+
+  private async _pushCreatedBranches(payload: {
+    submodules: string[];
+    branchName: string;
+  }) {
+    const results: Array<{ submodule: string; success: boolean; message: string }> = [];
+
+    for (const submodulePath of payload.submodules) {
+      try {
+        const result = await this._gitOps.pushChanges(submodulePath); // Already uses -u for upstream
+        results.push({
+          submodule: submodulePath,
+          success: result.success,
+          message: result.message
+        });
+      } catch (error) {
+        results.push({
+          submodule: submodulePath,
+          success: false,
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+
+    if (successCount === results.length) {
+      vscode.window.showInformationMessage(
+        `Branch '${payload.branchName}' pushed to ${successCount} remote(s)`
+      );
+    } else {
+      vscode.window.showWarningMessage(
+        `Pushed to ${successCount}/${results.length} remotes`
+      );
+    }
+
+    // Send results to webview
+    this._panel.webview.postMessage({
+      type: 'pushResults',
+      payload: { results }
+    });
 
     await this.refresh();
   }
@@ -961,12 +1054,43 @@ export class SubmoduleManagerPanel {
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label">Branch Name</label>
-          <input type="text" class="form-input" id="branchName" placeholder="feature/my-new-feature">
-        </div>
-        <div class="form-group">
           <label class="form-label">Base Branch</label>
           <input type="text" class="form-input" id="baseBranch" placeholder="main" value="main">
+          <div id="baseBranchHint" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Branch Prefix</label>
+          <select class="form-select" id="branchPrefix">
+            <option value="bugfix">bugfix/</option>
+            <option value="release">Release/</option>
+            <option value="dev">dev/</option>
+          </select>
+          <div id="prefixRuleHint" style="font-size: 11px; color: var(--info); margin-top: 4px;"></div>
+        </div>
+        <div class="form-group" id="ticketIdGroup">
+          <label class="form-label">Ticket ID (optional)</label>
+          <input type="text" class="form-input" id="ticketId" placeholder="e.g., ECPT-15474">
+        </div>
+        <div class="form-group" id="taskTitleGroup">
+          <label class="form-label">Task Title</label>
+          <input type="text" class="form-input" id="taskTitle" placeholder="e.g., Design and Implement XML Parser Abstraction Class">
+        </div>
+        <div class="form-group" id="releaseInfoGroup" style="display: none;">
+          <label class="form-label">Product Name</label>
+          <input type="text" class="form-input" id="productName" placeholder="e.g., HexOGen">
+          <label class="form-label" style="margin-top: 12px;">Version</label>
+          <input type="text" class="form-input" id="releaseVersion" placeholder="e.g., 10.54.0">
+        </div>
+        <div class="form-group" id="devBranchGroup" style="display: none;">
+          <label class="form-label">Development Branch Name</label>
+          <input type="text" class="form-input" id="devBranchName" placeholder="e.g., sprint-42 or v2-refactor">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Generated Branch Name</label>
+          <div id="branchPreview" style="padding: 10px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; font-family: var(--vscode-editor-font-family); word-break: break-all; min-height: 20px; color: var(--text-secondary);">
+            bugfix/your-branch-name
+          </div>
+          <input type="hidden" id="branchName">
         </div>
         <div class="form-group">
           <label class="form-label">Apply to Submodules</label>
@@ -983,6 +1107,33 @@ export class SubmoduleManagerPanel {
       <div class="modal-footer">
         <button class="btn" data-action="closeModal" data-modal="createBranchModal">Cancel</button>
         <button class="btn btn-primary" data-action="createBranch">Create Branch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Review Branch Modal -->
+  <div class="modal-overlay" id="reviewBranchModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Review Created Branch</span>
+        <button class="modal-close" data-action="closeModal" data-modal="reviewBranchModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="branchCreationResults" style="margin-bottom: 16px;"></div>
+        <div class="form-group">
+          <label class="form-label">Branch Name</label>
+          <div id="reviewBranchName" style="padding: 10px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; font-family: var(--vscode-editor-font-family); word-break: break-all;"></div>
+        </div>
+        <div class="form-group">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="pushAfterCreate" checked>
+            <span>Push branch to remote after confirmation</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-action="closeModal" data-modal="reviewBranchModal">Close</button>
+        <button class="btn btn-primary" data-action="confirmAndPush">Confirm & Push</button>
       </div>
     </div>
   </div>
@@ -1119,6 +1270,14 @@ export class SubmoduleManagerPanel {
       },
 
       openCreateBranchModal: () => {
+        // Reset form fields
+        document.getElementById('ticketId').value = '';
+        document.getElementById('taskTitle').value = '';
+        document.getElementById('productName').value = '';
+        document.getElementById('releaseVersion').value = '';
+        document.getElementById('devBranchName').value = '';
+        document.getElementById('baseBranch').value = 'main';
+        updatePrefixOptions();
         document.getElementById('createBranchModal').classList.add('active');
       },
 
@@ -1130,22 +1289,58 @@ export class SubmoduleManagerPanel {
       createBranch: () => {
         const branchName = document.getElementById('branchName').value.trim();
         const baseBranch = document.getElementById('baseBranch').value.trim() || 'main';
-        if (!branchName) return;
+
+        // Validate branch name
+        if (!branchName ||
+            branchName.includes('your-branch-name') ||
+            branchName.endsWith('-') ||
+            branchName.endsWith('_') ||
+            branchName.includes('x.x.x')) {
+          alert('Please fill in all required fields to generate a valid branch name.');
+          return;
+        }
 
         const checkboxes = document.querySelectorAll('.branch-submodule:checked');
         const submodules = Array.from(checkboxes).map(cb => cb.value);
-        if (submodules.length === 0) return;
+        if (submodules.length === 0) {
+          alert('Please select at least one submodule.');
+          return;
+        }
 
-        postMessage('createBranch', { submodules, branchName, baseBranch });
+        // Store pending info for review
+        pendingBranchInfo = { submodules, branchName, baseBranch };
+        postMessage('createBranchWithReview', { submodules, branchName, baseBranch });
         document.getElementById('createBranchModal').classList.remove('active');
       },
 
       createBranchForSelected: () => {
         if (selectedSubmodules.size === 0) return;
+        // Reset form fields
+        document.getElementById('ticketId').value = '';
+        document.getElementById('taskTitle').value = '';
+        document.getElementById('productName').value = '';
+        document.getElementById('releaseVersion').value = '';
+        document.getElementById('devBranchName').value = '';
+        document.getElementById('baseBranch').value = 'main';
+        updatePrefixOptions();
+        // Set selected submodules
         document.querySelectorAll('.branch-submodule').forEach(cb => {
           cb.checked = selectedSubmodules.has(cb.value);
         });
         document.getElementById('createBranchModal').classList.add('active');
+      },
+
+      confirmAndPush: () => {
+        if (!pendingBranchInfo) return;
+        const shouldPush = document.getElementById('pushAfterCreate').checked;
+        if (shouldPush) {
+          postMessage('pushCreatedBranches', {
+            submodules: pendingBranchInfo.submodules,
+            branchName: pendingBranchInfo.branchName
+          });
+        }
+        pendingBranchInfo = null;
+        document.getElementById('reviewBranchModal').classList.remove('active');
       },
 
       openCheckoutModal: (el) => {
@@ -1347,6 +1542,21 @@ export class SubmoduleManagerPanel {
         case 'rebaseStatusUpdated':
           updateRebaseUI();
           break;
+
+        case 'branchCreationResults':
+          const { branchName: createdBranch, results } = message.payload;
+          showReviewModal(createdBranch, results);
+          break;
+
+        case 'pushResults':
+          const pushResults = message.payload.results;
+          const pushSuccessCount = pushResults.filter(r => r.success).length;
+          if (pushSuccessCount === pushResults.length) {
+            alert('Successfully pushed branch to ' + pushSuccessCount + ' remote(s)');
+          } else {
+            alert('Pushed to ' + pushSuccessCount + '/' + pushResults.length + ' remotes. Some pushes failed.');
+          }
+          break;
       }
     });
 
@@ -1388,6 +1598,175 @@ export class SubmoduleManagerPanel {
       };
       return icons[status] || '?';
     }
+
+    // Branch naming tool functions
+    // Branch hierarchy rules:
+    // - main -> bugfix/, release/, dev/
+    // - dev -> feature/
+    // - feature -> task/
+    const branchHierarchy = {
+      'main': { prefixes: ['bugfix', 'release', 'dev'], hint: 'From main: Create bugfix, release, or dev branches' },
+      'master': { prefixes: ['bugfix', 'release', 'dev'], hint: 'From master: Create bugfix, release, or dev branches' },
+      'dev': { prefixes: ['feature'], hint: 'From dev: Create feature branches' },
+      'feature': { prefixes: ['task'], hint: 'From feature: Create task branches' }
+    };
+
+    // Store created branch info for review
+    let pendingBranchInfo = null;
+
+    function toKebabCase(str) {
+      return str
+        .toLowerCase()
+        .replace(/[^a-z0-9\\s-]/g, '') // Remove special characters except spaces and hyphens
+        .replace(/\\s+/g, '-')          // Replace spaces with hyphens
+        .replace(/-+/g, '-')            // Replace multiple hyphens with single hyphen
+        .replace(/^-|-$/g, '');         // Remove leading/trailing hyphens
+    }
+
+    function getBaseBranchType(baseBranch) {
+      const lower = baseBranch.toLowerCase();
+      if (lower === 'main' || lower === 'master') return 'main';
+      if (lower === 'dev' || lower.startsWith('dev/') || lower.startsWith('dev-')) return 'dev';
+      if (lower.startsWith('feature/') || lower.startsWith('feature-')) return 'feature';
+      return 'main'; // Default to main rules
+    }
+
+    function updatePrefixOptions() {
+      const baseBranch = document.getElementById('baseBranch').value.trim() || 'main';
+      const branchType = getBaseBranchType(baseBranch);
+      const rules = branchHierarchy[branchType] || branchHierarchy['main'];
+
+      const prefixSelect = document.getElementById('branchPrefix');
+      const currentValue = prefixSelect.value;
+
+      // Update options based on rules
+      prefixSelect.innerHTML = rules.prefixes.map(p => {
+        const displayPrefix = p === 'release' ? 'Release/' : p + '/';
+        return \`<option value="\${p}">\${displayPrefix}</option>\`;
+      }).join('');
+
+      // Try to keep current selection if valid, otherwise use first option
+      if (rules.prefixes.includes(currentValue)) {
+        prefixSelect.value = currentValue;
+      } else {
+        prefixSelect.value = rules.prefixes[0];
+      }
+
+      // Update hints
+      document.getElementById('baseBranchHint').textContent = 'Type: ' + branchType;
+      document.getElementById('prefixRuleHint').textContent = rules.hint;
+
+      toggleBranchFormFields();
+    }
+
+    function updateBranchPreview() {
+      const prefix = document.getElementById('branchPrefix').value;
+      const preview = document.getElementById('branchPreview');
+      const branchNameInput = document.getElementById('branchName');
+      let branchName = '';
+
+      if (prefix === 'release') {
+        const productName = document.getElementById('productName').value.trim();
+        const version = document.getElementById('releaseVersion').value.trim();
+        if (productName && version) {
+          branchName = 'Release/' + productName + '_' + version;
+        } else if (productName) {
+          branchName = 'Release/' + productName + '_';
+        } else {
+          branchName = 'Release/ProductName_x.x.x';
+        }
+      } else if (prefix === 'dev') {
+        const devName = document.getElementById('devBranchName').value.trim();
+        const kebabDevName = toKebabCase(devName);
+        if (kebabDevName) {
+          branchName = 'dev/' + kebabDevName;
+        } else {
+          branchName = 'dev/your-branch-name';
+        }
+      } else {
+        const ticketId = document.getElementById('ticketId').value.trim();
+        const taskTitle = document.getElementById('taskTitle').value.trim();
+        const kebabTitle = toKebabCase(taskTitle);
+
+        const prefixStr = prefix + '/';
+        if (ticketId && kebabTitle) {
+          branchName = prefixStr + ticketId + '-' + kebabTitle;
+        } else if (ticketId) {
+          branchName = prefixStr + ticketId + '-';
+        } else if (kebabTitle) {
+          branchName = prefixStr + kebabTitle;
+        } else {
+          branchName = prefixStr + 'your-branch-name';
+        }
+      }
+
+      preview.textContent = branchName;
+      preview.style.color = (branchName.includes('your-branch-name') || branchName.endsWith('_') || branchName.endsWith('-') || branchName.endsWith('x.x.x'))
+        ? 'var(--text-secondary)'
+        : 'var(--text-primary)';
+      branchNameInput.value = branchName;
+    }
+
+    function toggleBranchFormFields() {
+      const prefix = document.getElementById('branchPrefix').value;
+      const ticketIdGroup = document.getElementById('ticketIdGroup');
+      const taskTitleGroup = document.getElementById('taskTitleGroup');
+      const releaseInfoGroup = document.getElementById('releaseInfoGroup');
+      const devBranchGroup = document.getElementById('devBranchGroup');
+
+      // Hide all first
+      ticketIdGroup.style.display = 'none';
+      taskTitleGroup.style.display = 'none';
+      releaseInfoGroup.style.display = 'none';
+      devBranchGroup.style.display = 'none';
+
+      if (prefix === 'release') {
+        releaseInfoGroup.style.display = 'block';
+      } else if (prefix === 'dev') {
+        devBranchGroup.style.display = 'block';
+      } else {
+        // feature, task, bugfix
+        ticketIdGroup.style.display = 'block';
+        taskTitleGroup.style.display = 'block';
+      }
+      updateBranchPreview();
+    }
+
+    function showReviewModal(branchName, results) {
+      const resultsDiv = document.getElementById('branchCreationResults');
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      let html = '<div style="margin-bottom: 12px;">';
+      if (failCount === 0) {
+        html += \`<span style="color: var(--success);">✓ Branch created successfully in \${successCount} submodule(s)</span>\`;
+      } else {
+        html += \`<span style="color: var(--warning);">⚠ Created in \${successCount}, failed in \${failCount} submodule(s)</span>\`;
+      }
+      html += '</div>';
+
+      // Show per-submodule results
+      html += '<div style="max-height: 150px; overflow-y: auto; font-size: 12px;">';
+      results.forEach(r => {
+        const icon = r.success ? '✓' : '✗';
+        const color = r.success ? 'var(--success)' : 'var(--error)';
+        html += \`<div style="padding: 4px 0; color: \${color};">\${icon} \${r.submodule}: \${r.message}</div>\`;
+      });
+      html += '</div>';
+
+      resultsDiv.innerHTML = html;
+      document.getElementById('reviewBranchName').textContent = branchName;
+      document.getElementById('reviewBranchModal').classList.add('active');
+    }
+
+    // Event listeners for branch naming inputs
+    document.getElementById('baseBranch').addEventListener('input', updatePrefixOptions);
+    document.getElementById('branchPrefix').addEventListener('change', toggleBranchFormFields);
+    document.getElementById('ticketId').addEventListener('input', updateBranchPreview);
+    document.getElementById('taskTitle').addEventListener('input', updateBranchPreview);
+    document.getElementById('productName').addEventListener('input', updateBranchPreview);
+    document.getElementById('releaseVersion').addEventListener('input', updateBranchPreview);
+    document.getElementById('devBranchName').addEventListener('input', updateBranchPreview);
 
     // Initialize UI on load
     updateSelectionUI();
