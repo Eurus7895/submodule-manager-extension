@@ -189,6 +189,7 @@ export class SubmoduleManagerPanel {
           isRebasing: boolean;
         });
         break;
+
     }
   }
 

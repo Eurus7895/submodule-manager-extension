@@ -139,10 +139,16 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // Create branch command
   context.subscriptions.push(
     vscode.commands.registerCommand('submoduleManager.createBranch', async () => {
-      const submodules = submoduleTreeProvider.getSubmodules();
+      // Fetch submodules directly to ensure we have fresh data
+      let submodules = submoduleTreeProvider.getSubmodules();
+
+      // If cached submodules are empty, fetch them directly
+      if (submodules.length === 0) {
+        submodules = await gitOps.getSubmodules();
+      }
 
       if (submodules.length === 0) {
-        vscode.window.showWarningMessage('No submodules found');
+        vscode.window.showWarningMessage('No submodules found. Make sure this repository has submodules configured.');
         return;
       }
 
