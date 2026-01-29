@@ -146,31 +146,115 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
         return;
       }
 
-      // Get branch name
-      const branchName = await vscode.window.showInputBox({
-        prompt: 'Enter the new branch name',
-        placeHolder: 'feature/my-feature',
-        validateInput: (value) => {
-          if (!value || value.trim().length === 0) {
-            return 'Branch name is required';
-          }
-          if (!/^[\w\-./]+$/.test(value)) {
-            return 'Invalid branch name';
-          }
-          return null;
-        }
+      // Branch hierarchy rules
+      const branchHierarchy: Record<string, { prefixes: string[]; hint: string }> = {
+        'main': { prefixes: ['bugfix', 'release', 'dev'], hint: 'From main: bugfix/, release/, dev/' },
+        'dev': { prefixes: ['feature'], hint: 'From dev: feature/' },
+        'feature': { prefixes: ['task'], hint: 'From feature: task/' }
+      };
+
+      // Get available branches from main repo
+      const branches = await gitOps.getBranches('.');
+      const currentBranch = branches.find(b => b.isCurrent);
+      const currentBranchName = currentBranch?.name || 'main';
+
+      // Select base branch
+      const branchItems = branches
+        .filter(b => !b.isRemote)
+        .map(b => ({
+          label: b.name,
+          description: b.isCurrent ? '(current)' : '',
+          picked: b.isCurrent
+        }));
+
+      const selectedBaseBranch = await vscode.window.showQuickPick(branchItems, {
+        placeHolder: 'Select base branch',
+        title: 'Base Branch'
       });
 
-      if (!branchName) {
+      if (!selectedBaseBranch) {
         return;
       }
 
-      // Get base branch
-      const baseBranch = await vscode.window.showInputBox({
-        prompt: 'Enter the base branch (leave empty for current branch)',
-        placeHolder: 'main',
-        value: 'main'
+      const baseBranch = selectedBaseBranch.label;
+
+      // Determine allowed prefixes based on base branch
+      const getBaseBranchType = (branch: string): string => {
+        const lower = branch.toLowerCase();
+        if (lower === 'main' || lower === 'master') return 'main';
+        if (lower === 'dev' || lower.startsWith('dev/') || lower.startsWith('dev-')) return 'dev';
+        if (lower.startsWith('feature/') || lower.startsWith('feature-')) return 'feature';
+        return 'main';
+      };
+
+      const branchType = getBaseBranchType(baseBranch);
+      const rules = branchHierarchy[branchType] || branchHierarchy['main'];
+
+      // Select prefix
+      const prefixItems = rules.prefixes.map(p => ({
+        label: `${p}/`,
+        description: rules.hint
+      }));
+
+      const selectedPrefix = await vscode.window.showQuickPick(prefixItems, {
+        placeHolder: 'Select branch prefix',
+        title: `Branch Prefix (${rules.hint})`
       });
+
+      if (!selectedPrefix) {
+        return;
+      }
+
+      const prefix = selectedPrefix.label;
+
+      // Get branch details based on prefix
+      let branchName = '';
+
+      if (prefix === 'release/') {
+        const productName = await vscode.window.showInputBox({
+          prompt: 'Enter product name',
+          placeHolder: 'HexOGen'
+        });
+        if (!productName) return;
+
+        const version = await vscode.window.showInputBox({
+          prompt: 'Enter version',
+          placeHolder: '10.54.0'
+        });
+        if (!version) return;
+
+        branchName = `release/${productName}_${version}`;
+      } else if (prefix === 'dev/') {
+        const devName = await vscode.window.showInputBox({
+          prompt: 'Enter development branch name',
+          placeHolder: 'sprint-42'
+        });
+        if (!devName) return;
+
+        branchName = `dev/${devName.toLowerCase().replace(/\s+/g, '-')}`;
+      } else {
+        // bugfix, feature, task
+        const ticketId = await vscode.window.showInputBox({
+          prompt: 'Enter ticket ID (optional)',
+          placeHolder: 'ECPT-15474'
+        });
+
+        const taskTitle = await vscode.window.showInputBox({
+          prompt: 'Enter task title',
+          placeHolder: 'Design and Implement XML Parser'
+        });
+        if (!taskTitle) return;
+
+        const kebabTitle = taskTitle.toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+
+        branchName = ticketId
+          ? `${prefix}${ticketId}-${kebabTitle}`
+          : `${prefix}${kebabTitle}`;
+      }
 
       // Select submodules
       const items = submodules.map(s => ({
@@ -201,7 +285,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
           return await gitOps.createBranchAcrossSubmodules(
             selectedPaths,
             branchName,
-            baseBranch || undefined,
+            baseBranch,
             true
           );
         }
@@ -209,23 +293,50 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
       let successCount = 0;
       let failCount = 0;
+      const successfulPaths: string[] = [];
 
-      result.forEach((res) => {
+      result.forEach((res, path) => {
         if (res.success) {
           successCount++;
+          successfulPaths.push(path);
         } else {
           failCount++;
         }
       });
 
-      if (failCount === 0) {
-        vscode.window.showInformationMessage(
-          `Branch '${branchName}' created in ${successCount} submodule(s)`
+      // Show result and ask to push
+      if (successCount > 0) {
+        const message = failCount === 0
+          ? `Branch '${branchName}' created in ${successCount} submodule(s)`
+          : `Branch created in ${successCount}, failed in ${failCount} submodule(s)`;
+
+        const pushChoice = await vscode.window.showInformationMessage(
+          message,
+          'Push to Remote',
+          'Close'
         );
+
+        if (pushChoice === 'Push to Remote') {
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `Pushing branch '${branchName}'...`,
+              cancellable: false
+            },
+            async () => {
+              let pushSuccess = 0;
+              for (const submodulePath of successfulPaths) {
+                const pushResult = await gitOps.pushChanges(submodulePath);
+                if (pushResult.success) pushSuccess++;
+              }
+              vscode.window.showInformationMessage(
+                `Pushed to ${pushSuccess}/${successfulPaths.length} remote(s)`
+              );
+            }
+          );
+        }
       } else {
-        vscode.window.showWarningMessage(
-          `Branch created in ${successCount}, failed in ${failCount} submodule(s)`
-        );
+        vscode.window.showErrorMessage('Failed to create branch in all submodules');
       }
 
       submoduleTreeProvider.refresh();

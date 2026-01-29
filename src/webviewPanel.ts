@@ -125,6 +125,10 @@ export class SubmoduleManagerPanel {
         });
         break;
 
+      case 'getBaseBranchesForCreate':
+        await this._sendBaseBranchesForCreate();
+        break;
+
       case 'checkoutBranch':
         await this._checkoutBranch(message.payload as {
           submodule: string;
@@ -268,6 +272,34 @@ export class SubmoduleManagerPanel {
     });
 
     await this.refresh();
+  }
+
+  private async _sendBaseBranchesForCreate() {
+    try {
+      // Get branches from the main repository
+      const branches = await this._gitOps.getBranches('.');
+
+      // Find the current branch
+      const currentBranch = branches.find(b => b.isCurrent);
+      const currentBranchName = currentBranch?.name || 'main';
+
+      this._panel.webview.postMessage({
+        type: 'baseBranchesForCreate',
+        payload: {
+          branches: branches.filter(b => !b.isRemote), // Only local branches
+          currentBranch: currentBranchName
+        }
+      });
+    } catch (error) {
+      // Fallback to default branches
+      this._panel.webview.postMessage({
+        type: 'baseBranchesForCreate',
+        payload: {
+          branches: [{ name: 'main', isCurrent: true, isRemote: false }],
+          currentBranch: 'main'
+        }
+      });
+    }
   }
 
   private async _pushCreatedBranches(payload: {
@@ -1055,14 +1087,16 @@ export class SubmoduleManagerPanel {
       <div class="modal-body">
         <div class="form-group">
           <label class="form-label">Base Branch</label>
-          <input type="text" class="form-input" id="baseBranch" placeholder="main" value="main">
+          <select class="form-select" id="baseBranch">
+            <option value="">Loading branches...</option>
+          </select>
           <div id="baseBranchHint" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;"></div>
         </div>
         <div class="form-group">
           <label class="form-label">Branch Prefix</label>
           <select class="form-select" id="branchPrefix">
             <option value="bugfix">bugfix/</option>
-            <option value="release">Release/</option>
+            <option value="release">release/</option>
             <option value="dev">dev/</option>
           </select>
           <div id="prefixRuleHint" style="font-size: 11px; color: var(--info); margin-top: 4px;"></div>
@@ -1276,8 +1310,9 @@ export class SubmoduleManagerPanel {
         document.getElementById('productName').value = '';
         document.getElementById('releaseVersion').value = '';
         document.getElementById('devBranchName').value = '';
-        document.getElementById('baseBranch').value = 'main';
-        updatePrefixOptions();
+        document.getElementById('baseBranch').innerHTML = '<option value="">Loading branches...</option>';
+        // Request branches from first submodule (or main repo)
+        postMessage('getBaseBranchesForCreate', {});
         document.getElementById('createBranchModal').classList.add('active');
       },
 
@@ -1321,8 +1356,9 @@ export class SubmoduleManagerPanel {
         document.getElementById('productName').value = '';
         document.getElementById('releaseVersion').value = '';
         document.getElementById('devBranchName').value = '';
-        document.getElementById('baseBranch').value = 'main';
-        updatePrefixOptions();
+        document.getElementById('baseBranch').innerHTML = '<option value="">Loading branches...</option>';
+        // Request branches
+        postMessage('getBaseBranchesForCreate', {});
         // Set selected submodules
         document.querySelectorAll('.branch-submodule').forEach(cb => {
           cb.checked = selectedSubmodules.has(cb.value);
@@ -1557,6 +1593,20 @@ export class SubmoduleManagerPanel {
             alert('Pushed to ' + pushSuccessCount + '/' + pushResults.length + ' remotes. Some pushes failed.');
           }
           break;
+
+        case 'baseBranchesForCreate':
+          const baseBranchSelect = document.getElementById('baseBranch');
+          const availableBranches = message.payload.branches || [];
+          const currentBranchName = message.payload.currentBranch || 'main';
+          if (availableBranches.length === 0) {
+            baseBranchSelect.innerHTML = '<option value="main">main</option>';
+          } else {
+            baseBranchSelect.innerHTML = availableBranches.map(b =>
+              \`<option value="\${b.name}" \${b.name === currentBranchName ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}</option>\`
+            ).join('');
+          }
+          updatePrefixOptions();
+          break;
       }
     });
 
@@ -1641,8 +1691,7 @@ export class SubmoduleManagerPanel {
 
       // Update options based on rules
       prefixSelect.innerHTML = rules.prefixes.map(p => {
-        const displayPrefix = p === 'release' ? 'Release/' : p + '/';
-        return \`<option value="\${p}">\${displayPrefix}</option>\`;
+        return \`<option value="\${p}">\${p}/</option>\`;
       }).join('');
 
       // Try to keep current selection if valid, otherwise use first option
@@ -1669,11 +1718,11 @@ export class SubmoduleManagerPanel {
         const productName = document.getElementById('productName').value.trim();
         const version = document.getElementById('releaseVersion').value.trim();
         if (productName && version) {
-          branchName = 'Release/' + productName + '_' + version;
+          branchName = 'release/' + productName + '_' + version;
         } else if (productName) {
-          branchName = 'Release/' + productName + '_';
+          branchName = 'release/' + productName + '_';
         } else {
-          branchName = 'Release/ProductName_x.x.x';
+          branchName = 'release/ProductName_x.x.x';
         }
       } else if (prefix === 'dev') {
         const devName = document.getElementById('devBranchName').value.trim();
@@ -1760,7 +1809,7 @@ export class SubmoduleManagerPanel {
     }
 
     // Event listeners for branch naming inputs
-    document.getElementById('baseBranch').addEventListener('input', updatePrefixOptions);
+    document.getElementById('baseBranch').addEventListener('change', updatePrefixOptions);
     document.getElementById('branchPrefix').addEventListener('change', toggleBranchFormFields);
     document.getElementById('ticketId').addEventListener('input', updateBranchPreview);
     document.getElementById('taskTitle').addEventListener('input', updateBranchPreview);
