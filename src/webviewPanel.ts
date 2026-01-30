@@ -280,16 +280,31 @@ export class SubmoduleManagerPanel {
       // Get branches from the main repository
       const branches = await this._gitOps.getBranches('.');
 
-      // Find the current branch
+      // Find the current branch, or fall back to common defaults, or first available
       const currentBranch = branches.find(b => b.isCurrent);
-      const currentBranchName = currentBranch?.name || 'main';
+      let selectedBranchName: string;
+
+      if (currentBranch) {
+        selectedBranchName = currentBranch.name;
+      } else {
+        // Try to find common default branches
+        const mainBranch = branches.find(b => b.name === 'main' || b.name === 'master');
+        if (mainBranch) {
+          selectedBranchName = mainBranch.name;
+        } else if (branches.length > 0) {
+          // Use first available branch
+          selectedBranchName = branches[0].name;
+        } else {
+          selectedBranchName = 'main';
+        }
+      }
 
       this._panel.webview.postMessage({
         type: 'baseBranchesForCreate',
         payload: {
           // Show all branches (local and remote) so user can choose any as base
           branches: branches,
-          currentBranch: currentBranchName
+          currentBranch: selectedBranchName
         }
       });
     } catch (error) {
