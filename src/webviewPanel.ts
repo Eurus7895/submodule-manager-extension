@@ -1671,7 +1671,7 @@ export class SubmoduleManagerPanel {
           if (branchSubmodule) {
             const panelId = 'branches-' + branchSubmodule.replace(/[\\/.]/g, '-');
             const panel = document.getElementById(panelId);
-            if (panel && panel.style.display !== 'none') {
+            if (panel) {
               // Show all branches (local and remote) so user can checkout any
               if (branches.length === 0) {
                 panel.innerHTML = '<div class="branches-loading">No branches found</div>';
