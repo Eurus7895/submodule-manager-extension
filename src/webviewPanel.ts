@@ -280,31 +280,11 @@ export class SubmoduleManagerPanel {
       // Get branches from the main repository
       const branches = await this._gitOps.getBranches('.');
 
-      // Find the current branch, or fall back to common defaults, or first available
-      const currentBranch = branches.find(b => b.isCurrent);
-      let selectedBranchName: string;
-
-      if (currentBranch) {
-        selectedBranchName = currentBranch.name;
-      } else {
-        // Try to find common default branches
-        const mainBranch = branches.find(b => b.name === 'main' || b.name === 'master');
-        if (mainBranch) {
-          selectedBranchName = mainBranch.name;
-        } else if (branches.length > 0) {
-          // Use first available branch
-          selectedBranchName = branches[0].name;
-        } else {
-          selectedBranchName = 'main';
-        }
-      }
-
       this._panel.webview.postMessage({
         type: 'baseBranchesForCreate',
         payload: {
           // Show all branches (local and remote) so user can choose any as base
-          branches: branches,
-          currentBranch: selectedBranchName
+          branches: branches
         }
       });
     } catch (error) {
@@ -312,8 +292,7 @@ export class SubmoduleManagerPanel {
       this._panel.webview.postMessage({
         type: 'baseBranchesForCreate',
         payload: {
-          branches: [{ name: 'main', isCurrent: false, isRemote: false }],
-          currentBranch: 'main'
+          branches: [{ name: 'main', isCurrent: false, isRemote: false }]
         }
       });
     }
@@ -1634,13 +1613,13 @@ export class SubmoduleManagerPanel {
           const branches = message.payload.branches || [];
           const branchSubmodule = message.payload.submodule;
 
-          // Update checkout modal if open
+          // Update checkout modal if open - just list all branches
           if (branchSelect) {
             if (branches.length === 0) {
               branchSelect.innerHTML = '<option value="">No branches found</option>';
             } else {
               branchSelect.innerHTML = branches.map(b =>
-                \`<option value="\${b.name}" \${b.isCurrent ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
+                \`<option value="\${b.name}">\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
               ).join('');
             }
           }
@@ -1718,12 +1697,12 @@ export class SubmoduleManagerPanel {
         case 'baseBranchesForCreate':
           const baseBranchSelect = document.getElementById('baseBranch');
           const availableBranches = message.payload.branches || [];
-          const currentBranchName = message.payload.currentBranch || 'main';
           if (availableBranches.length === 0) {
             baseBranchSelect.innerHTML = '<option value="main">main</option>';
           } else {
+            // Just list all branches, let user choose - first option is auto-selected
             baseBranchSelect.innerHTML = availableBranches.map(b =>
-              \`<option value="\${b.name}" \${b.name === currentBranchName ? 'selected' : ''}>\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
+              \`<option value="\${b.name}">\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
             ).join('');
           }
           updatePrefixOptions();
