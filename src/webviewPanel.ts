@@ -280,19 +280,39 @@ export class SubmoduleManagerPanel {
       // Get branches from the main repository
       const branches = await this._gitOps.getBranches('.');
 
+      // If no branches found, send fallback
+      if (!branches || branches.length === 0) {
+        console.warn('No branches found, using fallback');
+        this._panel.webview.postMessage({
+          type: 'baseBranchesForCreate',
+          payload: {
+            branches: [
+              { name: 'main', isCurrent: false, isRemote: false },
+              { name: 'master', isCurrent: false, isRemote: false },
+              { name: 'develop', isCurrent: false, isRemote: false }
+            ]
+          }
+        });
+        return;
+      }
+
       this._panel.webview.postMessage({
         type: 'baseBranchesForCreate',
         payload: {
-          // Show all branches (local and remote) so user can choose any as base
           branches: branches
         }
       });
     } catch (error) {
+      console.error('Error getting branches for create:', error);
       // Fallback to default branches
       this._panel.webview.postMessage({
         type: 'baseBranchesForCreate',
         payload: {
-          branches: [{ name: 'main', isCurrent: false, isRemote: false }]
+          branches: [
+            { name: 'main', isCurrent: false, isRemote: false },
+            { name: 'master', isCurrent: false, isRemote: false },
+            { name: 'develop', isCurrent: false, isRemote: false }
+          ]
         }
       });
     }
@@ -412,6 +432,23 @@ export class SubmoduleManagerPanel {
   private async _sendBranches(payload: { submodule: string }) {
     try {
       const branches = await this._gitOps.getBranches(payload.submodule);
+
+      // If no branches found, send fallback
+      if (!branches || branches.length === 0) {
+        console.warn(`No branches found for ${payload.submodule}, using fallback`);
+        this._panel.webview.postMessage({
+          type: 'branches',
+          payload: {
+            submodule: payload.submodule,
+            branches: [
+              { name: 'main', isCurrent: false, isRemote: false },
+              { name: 'master', isCurrent: false, isRemote: false }
+            ]
+          }
+        });
+        return;
+      }
+
       this._panel.webview.postMessage({
         type: 'branches',
         payload: { submodule: payload.submodule, branches }
@@ -420,7 +457,13 @@ export class SubmoduleManagerPanel {
       console.error('Error getting branches:', error);
       this._panel.webview.postMessage({
         type: 'branches',
-        payload: { submodule: payload.submodule, branches: [] }
+        payload: {
+          submodule: payload.submodule,
+          branches: [
+            { name: 'main', isCurrent: false, isRemote: false },
+            { name: 'master', isCurrent: false, isRemote: false }
+          ]
+        }
       });
     }
   }
