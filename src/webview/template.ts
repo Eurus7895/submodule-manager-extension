@@ -3,8 +3,15 @@
  */
 
 import { SubmoduleInfo } from '../types';
-import { getStyles } from './styles';
-import { getScripts } from './scripts';
+import * as vscode from 'vscode';
+
+/**
+ * URIs for external webview resources
+ */
+export interface WebviewResourceUris {
+  scriptUri: vscode.Uri;
+  styleUri: vscode.Uri;
+}
 
 /**
  * Get status icon for submodule status
@@ -299,7 +306,7 @@ function getNonce(): string {
 /**
  * Generate the full HTML for the webview
  */
-export function getHtmlForWebview(submodules: SubmoduleInfo[]): string {
+export function getHtmlForWebview(submodules: SubmoduleInfo[], resourceUris: WebviewResourceUris): string {
   const nonce = getNonce();
 
   return `<!DOCTYPE html>
@@ -307,11 +314,9 @@ export function getHtmlForWebview(submodules: SubmoduleInfo[]): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${resourceUris.styleUri.scheme}:; script-src 'nonce-${nonce}';">
   <title>Submodule Manager</title>
-  <style>
-    ${getStyles()}
-  </style>
+  <link rel="stylesheet" href="${resourceUris.styleUri}">
 </head>
 <body>
   <div class="container">
@@ -347,9 +352,8 @@ export function getHtmlForWebview(submodules: SubmoduleInfo[]): string {
 
   ${renderModals(submodules)}
 
-  <script nonce="${nonce}">
-    ${getScripts(submodules)}
-  </script>
+  <script nonce="${nonce}">window.__initialSubmodules = ${JSON.stringify(submodules)};</script>
+  <script nonce="${nonce}" src="${resourceUris.scriptUri}"></script>
 </body>
 </html>`;
 }

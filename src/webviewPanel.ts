@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import { GitOperations } from './gitOperations';
 import { PRManager } from './prManager';
-import { getHtmlForWebview } from './webview/template';
+import { getHtmlForWebview, WebviewResourceUris } from './webview/template';
 import { messageHandlers, MessageHandlerContext } from './handlers/webviewMessageHandler';
 
 export class SubmoduleManagerPanel {
@@ -74,11 +74,22 @@ export class SubmoduleManagerPanel {
     await this._update(fullRefresh);
   }
 
+  private _getResourceUris(): WebviewResourceUris {
+    const scriptUri = this._panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview.js')
+    );
+    const styleUri = this._panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview.css')
+    );
+    return { scriptUri, styleUri };
+  }
+
   private async _update(fullRefresh: boolean = true) {
     const submodules = await this._gitOps.getSubmodules();
 
     if (fullRefresh) {
-      this._panel.webview.html = getHtmlForWebview(submodules);
+      const resourceUris = this._getResourceUris();
+      this._panel.webview.html = getHtmlForWebview(submodules, resourceUris);
     } else {
       // Send data update instead of regenerating HTML
       this._panel.webview.postMessage({
