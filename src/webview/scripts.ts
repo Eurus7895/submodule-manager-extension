@@ -241,6 +241,18 @@ export function getScripts(submodules: SubmoduleInfo[]): string {
         if (submodule && branch) {
           postMessage('checkoutBranch', { submodule, branch });
         }
+      },
+
+      deleteBranchInline: (el) => {
+        const submodule = el.dataset.submodule;
+        const branch = el.dataset.branch;
+        if (!submodule || !branch) return;
+
+        const deleteRemote = confirm('Also delete the remote branch?');
+        const confirmMsg = 'Delete branch "' + branch + '"' + (deleteRemote ? ' (local + remote)' : '') + '?';
+        if (confirm(confirmMsg)) {
+          postMessage('deleteBranch', { submodule, branch, deleteRemote });
+        }
       }
     };
 
@@ -332,107 +344,124 @@ export function getScripts(submodules: SubmoduleInfo[]): string {
     // Handle messages from extension
     window.addEventListener('message', event => {
       const message = event.data;
+      if (!message || !message.type) return;
 
-      switch (message.type) {
-        case 'branches':
-          const branchSelect = document.getElementById('branchSelect');
-          const branches = message.payload.branches || [];
-          const branchSubmodule = message.payload.submodule;
+      try {
+        switch (message.type) {
+          case 'branches': {
+            const branchSelect = document.getElementById('branchSelect');
+            const branches = (message.payload && message.payload.branches) || [];
+            const branchSubmodule = message.payload && message.payload.submodule;
 
-          // Update checkout modal if open - just list all branches
-          if (branchSelect) {
-            if (branches.length === 0) {
-              branchSelect.innerHTML = '<option value="">No branches found</option>';
-            } else {
-              branchSelect.innerHTML = branches.map(b =>
-                \`<option value="\${b.name}">\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
-              ).join('');
-            }
-          }
-
-          // Update inline branches panel if exists
-          if (branchSubmodule) {
-            const panelId = 'branches-' + branchSubmodule.replace(/[\\\\/.]/g, '-');
-            const panel = document.getElementById(panelId);
-            if (panel) {
-              // Show all branches (local and remote) so user can checkout any
+            // Update checkout modal if open - just list all branches
+            if (branchSelect) {
               if (branches.length === 0) {
-                panel.innerHTML = '<div class="branches-loading">No branches found</div>';
+                branchSelect.innerHTML = '<option value="">No branches found</option>';
               } else {
-                panel.innerHTML = '<div class="branches-list">' + branches.map(b =>
-                  \`<span class="branch-item \${b.isCurrent ? 'current' : ''} \${b.isRemote ? 'remote' : ''}" data-action="checkoutBranchInline" data-submodule="\${branchSubmodule}" data-branch="\${b.name}">
-                    <span class="branch-icon">\${b.isCurrent ? '✓' : (b.isRemote ? '☁' : '⎇')}</span>
-                    \${b.name}\${b.isRemote ? ' (remote)' : ''}
-                  </span>\`
-                ).join('') + '</div>';
+                branchSelect.innerHTML = branches.map(b =>
+                  \`<option value="\${b.name}">\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
+                ).join('');
               }
             }
+
+            // Update inline branches panel if exists
+            if (branchSubmodule) {
+              const panelId = 'branches-' + branchSubmodule.replace(/[\\\\/.]/g, '-');
+              const panel = document.getElementById(panelId);
+              if (panel) {
+                if (branches.length === 0) {
+                  panel.innerHTML = '<div class="branches-loading">No branches found</div>';
+                } else {
+                  panel.innerHTML = '<div class="branches-list">' + branches.map(b =>
+                    \`<span class="branch-item \${b.isCurrent ? 'current' : ''} \${b.isRemote ? 'remote' : ''}">
+                      <span class="branch-icon" data-action="checkoutBranchInline" data-submodule="\${branchSubmodule}" data-branch="\${b.name}" title="Checkout \${b.name}">\${b.isCurrent ? '✓' : (b.isRemote ? '☁' : '⎇')}</span>
+                      <span data-action="checkoutBranchInline" data-submodule="\${branchSubmodule}" data-branch="\${b.name}" title="Checkout \${b.name}">\${b.name}\${b.isRemote ? ' (remote)' : ''}</span>
+                      \${!b.isCurrent ? \`<span class="branch-delete" data-action="deleteBranchInline" data-submodule="\${branchSubmodule}" data-branch="\${b.name}" title="Delete \${b.name}">✕</span>\` : ''}
+                    </span>\`
+                  ).join('') + '</div>';
+                }
+              }
+            }
+            break;
           }
-          break;
 
-        case 'commits':
-          const commitSelect = document.getElementById('commitSelect');
-          const commits = message.payload.commits;
-          commitSelect.innerHTML = '<option value="">Select a commit...</option>' +
-            commits.map(c =>
-              \`<option value="\${c.hash}">\${c.shortHash} - \${c.message.substring(0, 50)}</option>\`
-            ).join('');
-          break;
-
-        case 'recordedCommit':
-          const recordedInfo = document.getElementById('recordedCommitInfo');
-          if (recordedInfo) {
-            const { recordedCommit, currentCommit, isMatching } = message.payload;
-            const statusClass = isMatching ? 'success' : 'warning';
-            const statusIcon = isMatching ? '✓' : '⚠';
-            recordedInfo.innerHTML = \`
-              <div class="recorded-commit-status \${statusClass}">
-                <span>\${statusIcon} Parent expects: <code>\${recordedCommit ? recordedCommit.substring(0, 8) : 'N/A'}</code></span>
-                <span>Current: <code>\${currentCommit ? currentCommit.substring(0, 8) : 'N/A'}</code></span>
-                \${!isMatching ? '<span class="mismatch-warning">Commits do not match!</span>' : ''}
-              </div>
-            \`;
+          case 'commits': {
+            const commitSelect = document.getElementById('commitSelect');
+            const commits = (message.payload && message.payload.commits) || [];
+            if (commitSelect) {
+              commitSelect.innerHTML = '<option value="">Select a commit...</option>' +
+                commits.map(c =>
+                  \`<option value="\${c.hash}">\${c.shortHash} - \${c.message.substring(0, 50)}</option>\`
+                ).join('');
+            }
+            break;
           }
-          break;
 
-        case 'updateSubmodules':
-          submoduleData = message.payload.submodules;
-          saveState();
-          updateSubmoduleRows(submoduleData);
-          break;
-
-        case 'rebaseStatusUpdated':
-          updateRebaseUI();
-          break;
-
-        case 'branchCreationResults':
-          const { branchName: createdBranch, results } = message.payload;
-          showReviewModal(createdBranch, results);
-          break;
-
-        case 'pushResults':
-          const pushResults = message.payload.results;
-          const pushSuccessCount = pushResults.filter(r => r.success).length;
-          if (pushSuccessCount === pushResults.length) {
-            alert('Successfully pushed branch to ' + pushSuccessCount + ' remote(s)');
-          } else {
-            alert('Pushed to ' + pushSuccessCount + '/' + pushResults.length + ' remotes. Some pushes failed.');
+          case 'recordedCommit': {
+            const recordedInfo = document.getElementById('recordedCommitInfo');
+            if (recordedInfo && message.payload) {
+              const { recordedCommit, currentCommit, isMatching } = message.payload;
+              const statusClass = isMatching ? 'success' : 'warning';
+              const statusIcon = isMatching ? '✓' : '⚠';
+              recordedInfo.innerHTML = \`
+                <div class="recorded-commit-status \${statusClass}">
+                  <span>\${statusIcon} Parent expects: <code>\${recordedCommit ? recordedCommit.substring(0, 8) : 'N/A'}</code></span>
+                  <span>Current: <code>\${currentCommit ? currentCommit.substring(0, 8) : 'N/A'}</code></span>
+                  \${!isMatching ? '<span class="mismatch-warning">Commits do not match!</span>' : ''}
+                </div>
+              \`;
+            }
+            break;
           }
-          break;
 
-        case 'baseBranchesForCreate':
-          const baseBranchSelect = document.getElementById('baseBranch');
-          const availableBranches = message.payload.branches || [];
-          if (availableBranches.length === 0) {
-            baseBranchSelect.innerHTML = '<option value="main">main</option>';
-          } else {
-            // Just list all branches, let user choose - first option is auto-selected
-            baseBranchSelect.innerHTML = availableBranches.map(b =>
-              \`<option value="\${b.name}">\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
-            ).join('');
+          case 'updateSubmodules': {
+            submoduleData = message.payload.submodules;
+            saveState();
+            updateSubmoduleRows(submoduleData);
+            break;
           }
-          updatePrefixOptions();
-          break;
+
+          case 'rebaseStatusUpdated': {
+            updateRebaseUI();
+            break;
+          }
+
+          case 'branchCreationResults': {
+            const createdBranch = message.payload.branchName;
+            const results = message.payload.results;
+            showReviewModal(createdBranch, results);
+            break;
+          }
+
+          case 'pushResults': {
+            const pushResults = message.payload.results || [];
+            const pushSuccessCount = pushResults.filter(r => r.success).length;
+            if (pushSuccessCount === pushResults.length) {
+              alert('Successfully pushed branch to ' + pushSuccessCount + ' remote(s)');
+            } else {
+              alert('Pushed to ' + pushSuccessCount + '/' + pushResults.length + ' remotes. Some pushes failed.');
+            }
+            break;
+          }
+
+          case 'baseBranchesForCreate': {
+            const baseBranchSelect = document.getElementById('baseBranch');
+            const availableBranches = (message.payload && message.payload.branches) || [];
+            if (baseBranchSelect) {
+              if (availableBranches.length === 0) {
+                baseBranchSelect.innerHTML = '<option value="main">main</option>';
+              } else {
+                baseBranchSelect.innerHTML = availableBranches.map(b =>
+                  \`<option value="\${b.name}">\${b.name}\${b.isCurrent ? ' (current)' : ''}\${b.isRemote ? ' (remote)' : ''}</option>\`
+                ).join('');
+              }
+              updatePrefixOptions();
+            }
+            break;
+          }
+        }
+      } catch (err) {
+        console.error('Error handling message:', message.type, err);
       }
     });
 

@@ -272,6 +272,25 @@ export function getStyles(): string {
       font-size: 10px;
     }
 
+    .branch-item .branch-delete {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-left: 4px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      opacity: 0;
+      transition: all 0.15s ease;
+    }
+
+    .branch-item:hover .branch-delete {
+      opacity: 1;
+    }
+
+    .branch-item .branch-delete:hover {
+      color: var(--error);
+      background: rgba(220, 53, 69, 0.15);
+    }
+
     .row-checkbox {
       width: 18px;
       height: 18px;

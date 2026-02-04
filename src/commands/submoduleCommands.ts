@@ -352,6 +352,247 @@ export function registerStageSubmoduleCommand(
 }
 
 /**
+ * Register delete branch command (right-click submodule -> Delete Branch)
+ */
+export function registerDeleteBranchCommand(
+  context: vscode.ExtensionContext,
+  ctx: CommandContext
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand('submoduleManager.deleteBranch', async (item) => {
+      if (!item || !item.submodule) {
+        return;
+      }
+
+      const branches = await ctx.gitOps.getBranches(item.submodule.path);
+
+      if (branches.length === 0) {
+        vscode.window.showWarningMessage('No branches found');
+        return;
+      }
+
+      // Filter out current branch from delete options
+      const branchItems = branches
+        .filter(b => !b.isCurrent)
+        .map(b => ({
+          label: b.name,
+          description: b.isRemote ? 'Remote branch' : 'Local branch'
+        }));
+
+      if (branchItems.length === 0) {
+        vscode.window.showWarningMessage('No branches available to delete (cannot delete current branch)');
+        return;
+      }
+
+      const selected = await vscode.window.showQuickPick(branchItems, {
+        placeHolder: 'Select a branch to delete',
+        title: `Delete Branch in ${item.submodule.name}`
+      });
+
+      if (!selected) {
+        return;
+      }
+
+      // Ask about remote deletion
+      const deleteRemote = await vscode.window.showQuickPick(
+        [
+          { label: 'Local only', description: 'Delete only the local branch', value: false },
+          { label: 'Local + Remote', description: 'Delete both local and remote branch', value: true }
+        ],
+        { placeHolder: 'Delete remote branch as well?' }
+      );
+
+      if (!deleteRemote) {
+        return;
+      }
+
+      // Confirm deletion
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete branch '${selected.label}' in ${item.submodule.name}${deleteRemote.value ? ' (local + remote)' : ''}?`,
+        { modal: true },
+        'Delete'
+      );
+
+      if (confirm !== 'Delete') {
+        return;
+      }
+
+      const result = await ctx.gitOps.deleteBranch(item.submodule.path, selected.label, deleteRemote.value);
+
+      if (result.success) {
+        vscode.window.showInformationMessage(result.message);
+      } else {
+        vscode.window.showErrorMessage(result.message);
+      }
+
+      ctx.submoduleTreeProvider.refresh();
+    })
+  );
+}
+
+/**
+ * Register delete branch from tree command (right-click on branch item)
+ */
+export function registerDeleteBranchFromTreeCommand(
+  context: vscode.ExtensionContext,
+  ctx: CommandContext
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand('submoduleManager.deleteBranchFromTree', async (item) => {
+      if (!item || !item.submodule || !item.branchName) {
+        return;
+      }
+
+      if (item.isCurrent) {
+        vscode.window.showWarningMessage('Cannot delete the currently checked out branch');
+        return;
+      }
+
+      // Ask about remote deletion
+      const deleteRemote = await vscode.window.showQuickPick(
+        [
+          { label: 'Local only', description: 'Delete only the local branch', value: false },
+          { label: 'Local + Remote', description: 'Delete both local and remote branch', value: true }
+        ],
+        { placeHolder: `Delete '${item.branchName}' - delete remote as well?` }
+      );
+
+      if (!deleteRemote) {
+        return;
+      }
+
+      // Confirm deletion
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete branch '${item.branchName}' in ${item.submodule.name}${deleteRemote.value ? ' (local + remote)' : ''}?`,
+        { modal: true },
+        'Delete'
+      );
+
+      if (confirm !== 'Delete') {
+        return;
+      }
+
+      const result = await ctx.gitOps.deleteBranch(item.submodule.path, item.branchName, deleteRemote.value);
+
+      if (result.success) {
+        vscode.window.showInformationMessage(result.message);
+      } else {
+        vscode.window.showErrorMessage(result.message);
+      }
+
+      ctx.submoduleTreeProvider.refresh();
+    })
+  );
+}
+
+/**
+ * Register delete branch across submodules command (quick action)
+ */
+export function registerDeleteBranchAcrossSubmodulesCommand(
+  context: vscode.ExtensionContext,
+  ctx: CommandContext
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand('submoduleManager.deleteBranchAcrossSubmodules', async () => {
+      let submodules = ctx.submoduleTreeProvider.getSubmodules();
+      if (submodules.length === 0) {
+        submodules = await ctx.gitOps.getSubmodules();
+      }
+
+      if (submodules.length === 0) {
+        vscode.window.showWarningMessage('No submodules found');
+        return;
+      }
+
+      // Get branch name to delete
+      const branchName = await vscode.window.showInputBox({
+        prompt: 'Enter the branch name to delete across submodules',
+        placeHolder: 'e.g., feature/my-branch'
+      });
+
+      if (!branchName) {
+        return;
+      }
+
+      // Select submodules
+      const items = submodules.map(s => ({
+        label: s.name,
+        description: s.path,
+        picked: true
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        canPickMany: true,
+        placeHolder: 'Select submodules to delete branch from'
+      });
+
+      if (!selected || selected.length === 0) {
+        return;
+      }
+
+      // Ask about remote deletion
+      const deleteRemote = await vscode.window.showQuickPick(
+        [
+          { label: 'Local only', description: 'Delete only the local branch', value: false },
+          { label: 'Local + Remote', description: 'Delete both local and remote branch', value: true }
+        ],
+        { placeHolder: 'Delete remote branch as well?' }
+      );
+
+      if (!deleteRemote) {
+        return;
+      }
+
+      // Confirm deletion
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete branch '${branchName}' in ${selected.length} submodule(s)${deleteRemote.value ? ' (local + remote)' : ''}?`,
+        { modal: true },
+        'Delete'
+      );
+
+      if (confirm !== 'Delete') {
+        return;
+      }
+
+      const selectedPaths = selected.map(s => s.description!);
+
+      const results = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Deleting branch '${branchName}'...`,
+          cancellable: false
+        },
+        async () => {
+          return await ctx.gitOps.deleteBranchAcrossSubmodules(selectedPaths, branchName, deleteRemote.value);
+        }
+      );
+
+      let successCount = 0;
+      let failCount = 0;
+      results.forEach((result) => {
+        if (result.success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      });
+
+      if (failCount === 0) {
+        vscode.window.showInformationMessage(
+          `Branch '${branchName}' deleted in ${successCount} submodule(s)`
+        );
+      } else {
+        vscode.window.showWarningMessage(
+          `Deleted in ${successCount}, failed in ${failCount} submodule(s)`
+        );
+      }
+
+      ctx.submoduleTreeProvider.refresh();
+    })
+  );
+}
+
+/**
  * Register all basic commands (excluding create branch)
  */
 export function registerBasicCommands(
@@ -370,4 +611,7 @@ export function registerBasicCommands(
   registerPushChangesCommand(context, ctx);
   registerCreatePRCommand(context, ctx);
   registerStageSubmoduleCommand(context, ctx);
+  registerDeleteBranchCommand(context, ctx);
+  registerDeleteBranchFromTreeCommand(context, ctx);
+  registerDeleteBranchAcrossSubmodulesCommand(context, ctx);
 }

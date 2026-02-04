@@ -432,6 +432,32 @@ export async function handleUpdateToRecorded(
 }
 
 /**
+ * Handler for deleting a branch
+ */
+export async function handleDeleteBranch(
+  ctx: MessageHandlerContext,
+  payload: { submodule: string; branch: string; deleteRemote: boolean }
+): Promise<void> {
+  const result = await ctx.gitOps.deleteBranch(payload.submodule, payload.branch, payload.deleteRemote);
+  showResult(result.success, result.message);
+
+  // Refresh the branches panel by sending updated branches
+  if (result.success) {
+    try {
+      const branches = await ctx.gitOps.getBranches(payload.submodule);
+      ctx.panel.webview.postMessage({
+        type: 'branches',
+        payload: { submodule: payload.submodule, branches }
+      });
+    } catch {
+      // Ignore branch refresh errors
+    }
+  }
+
+  await ctx.refresh();
+}
+
+/**
  * Handler for setting rebase status
  */
 export async function handleSetRebaseStatus(
@@ -466,5 +492,6 @@ export const messageHandlers: Record<string, (ctx: MessageHandlerContext, payloa
   'getCommits': (ctx, payload) => handleGetCommits(ctx, payload as { submodule: string }),
   'getRecordedCommit': (ctx, payload) => handleGetRecordedCommit(ctx, payload as { submodule: string }),
   'updateToRecorded': (ctx, payload) => handleUpdateToRecorded(ctx, payload as { submodule: string }),
+  'deleteBranch': (ctx, payload) => handleDeleteBranch(ctx, payload as { submodule: string; branch: string; deleteRemote: boolean }),
   'setRebaseStatus': (ctx, payload) => handleSetRebaseStatus(ctx, payload as { submodule: string; isRebasing: boolean })
 };

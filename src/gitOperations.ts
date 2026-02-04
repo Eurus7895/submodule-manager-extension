@@ -173,6 +173,28 @@ export class GitOperations {
   }
 
   /**
+   * Delete a branch in a submodule
+   */
+  async deleteBranch(
+    submodulePath: string,
+    branchName: string,
+    deleteRemote: boolean = false
+  ): Promise<CommandResult> {
+    return this.branchService.deleteBranch(submodulePath, branchName, deleteRemote);
+  }
+
+  /**
+   * Delete a branch across multiple submodules
+   */
+  async deleteBranchAcrossSubmodules(
+    submodulePaths: string[],
+    branchName: string,
+    deleteRemote: boolean = false
+  ): Promise<Map<string, CommandResult>> {
+    return this.branchService.deleteBranchAcrossSubmodules(submodulePaths, branchName, deleteRemote);
+  }
+
+  /**
    * Checkout a branch in a submodule
    */
   async checkoutBranch(submodulePath: string, branchName: string): Promise<CommandResult> {

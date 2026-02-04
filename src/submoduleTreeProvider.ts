@@ -286,6 +286,8 @@ export class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeIt
         'Open the Submodule Manager webview panel'),
       new ActionTreeItem('Create Branch', 'submoduleManager.createBranch', 'git-branch',
         'Create a new branch across multiple submodules'),
+      new ActionTreeItem('Delete Branch', 'submoduleManager.deleteBranchAcrossSubmodules', 'trash',
+        'Delete a branch across multiple submodules'),
       new ActionTreeItem('Sync Versions', 'submoduleManager.syncVersions', 'sync',
         'Sync all submodules to the commits recorded in the parent repository'),
       new ActionTreeItem('Initialize All', 'submoduleManager.initSubmodules', 'cloud-download',

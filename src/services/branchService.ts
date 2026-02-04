@@ -164,6 +164,64 @@ export class BranchService {
   }
 
   /**
+   * Delete a branch in a submodule
+   */
+  async deleteBranch(
+    submodulePath: string,
+    branchName: string,
+    deleteRemote: boolean = false
+  ): Promise<CommandResult> {
+    const fullPath = path.join(this.gitCmd.getWorkspaceRoot(), submodulePath);
+
+    try {
+      // Check if trying to delete current branch
+      const currentBranch = await this.gitCmd.execGit(['rev-parse', '--abbrev-ref', 'HEAD'], fullPath);
+      if (currentBranch === branchName) {
+        return { success: false, message: `Cannot delete the currently checked out branch '${branchName}'` };
+      }
+
+      // Delete local branch
+      await this.gitCmd.execGit(['branch', '-D', branchName], fullPath);
+
+      // Optionally delete remote branch
+      if (deleteRemote) {
+        try {
+          await this.gitCmd.execGit(['push', 'origin', '--delete', branchName], fullPath);
+        } catch (error: unknown) {
+          const err = error as Error;
+          return {
+            success: true,
+            message: `Local branch '${branchName}' deleted, but failed to delete remote: ${err.message}`
+          };
+        }
+      }
+
+      return { success: true, message: `Branch '${branchName}' deleted successfully${deleteRemote ? ' (local + remote)' : ''}` };
+    } catch (error: unknown) {
+      const err = error as Error;
+      return { success: false, message: `Failed to delete branch: ${err.message}` };
+    }
+  }
+
+  /**
+   * Delete a branch across multiple submodules
+   */
+  async deleteBranchAcrossSubmodules(
+    submodulePaths: string[],
+    branchName: string,
+    deleteRemote: boolean = false
+  ): Promise<Map<string, CommandResult>> {
+    const results = new Map<string, CommandResult>();
+
+    for (const submodulePath of submodulePaths) {
+      const result = await this.deleteBranch(submodulePath, branchName, deleteRemote);
+      results.set(submodulePath, result);
+    }
+
+    return results;
+  }
+
+  /**
    * Fetch updates for a submodule
    */
   async fetchUpdates(submodulePath: string): Promise<CommandResult> {

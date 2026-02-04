@@ -102,17 +102,30 @@ export class SubmoduleManagerPanel {
   }
 
   private async _handleMessage(message: { type: string; payload?: unknown }) {
-    // Handle refresh separately as it's not in the handler map
-    if (message.type === 'refresh') {
-      await this.refresh();
-      return;
-    }
+    try {
+      // Handle refresh separately as it's not in the handler map
+      if (message.type === 'refresh') {
+        await this.refresh();
+        return;
+      }
 
-    // Look up the handler in the message handlers map
-    const handler = messageHandlers[message.type];
-    if (handler) {
-      const ctx = this._createHandlerContext();
-      await handler(ctx, message.payload);
+      // Look up the handler in the message handlers map
+      const handler = messageHandlers[message.type];
+      if (handler) {
+        const ctx = this._createHandlerContext();
+        await handler(ctx, message.payload);
+      } else {
+        console.warn(`Unhandled webview message type: ${message.type}`);
+      }
+    } catch (error) {
+      console.error(`Error handling webview message '${message.type}':`, error);
+      // Try to notify the user about the error
+      try {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Submodule Manager: ${errorMsg}`);
+      } catch {
+        // Last resort - ignore
+      }
     }
   }
 
