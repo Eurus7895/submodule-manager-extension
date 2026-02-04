@@ -38,6 +38,20 @@ function showResult(success: boolean, message: string): void {
 }
 
 /**
+ * Send a message to the webview with await and error logging
+ */
+async function sendToWebview(ctx: MessageHandlerContext, message: { type: string; payload: unknown }): Promise<void> {
+  try {
+    const delivered = await ctx.panel.webview.postMessage(message);
+    if (!delivered) {
+      console.warn(`[SubmoduleManager] Message '${message.type}' was NOT delivered to webview`);
+    }
+  } catch (error) {
+    console.error(`[SubmoduleManager] Failed to send message '${message.type}' to webview:`, error);
+  }
+}
+
+/**
  * Handler for initializing submodules
  */
 export async function handleInitSubmodules(ctx: MessageHandlerContext): Promise<void> {
@@ -118,7 +132,7 @@ export async function handleCreateBranchWithReview(
   });
 
   // Send results to webview for review
-  ctx.panel.webview.postMessage({
+  await sendToWebview(ctx, {
     type: 'branchCreationResults',
     payload: {
       branchName: payload.branchName,
@@ -130,49 +144,34 @@ export async function handleCreateBranchWithReview(
 }
 
 /**
+ * Fallback branches when getBranches fails
+ */
+const FALLBACK_BRANCHES = [
+  { name: 'main', isCurrent: false, isRemote: false },
+  { name: 'master', isCurrent: false, isRemote: false },
+  { name: 'develop', isCurrent: false, isRemote: false }
+];
+
+/**
  * Handler for getting base branches for create modal
  */
 export async function handleGetBaseBranchesForCreate(ctx: MessageHandlerContext): Promise<void> {
+  let branches = FALLBACK_BRANCHES;
+
   try {
-    // Get branches from the main repository
-    const branches = await ctx.gitOps.getBranches('.');
-
-    // If no branches found, send fallback
-    if (!branches || branches.length === 0) {
-      console.warn('No branches found, using fallback');
-      ctx.panel.webview.postMessage({
-        type: 'baseBranchesForCreate',
-        payload: {
-          branches: [
-            { name: 'main', isCurrent: false, isRemote: false },
-            { name: 'master', isCurrent: false, isRemote: false },
-            { name: 'develop', isCurrent: false, isRemote: false }
-          ]
-        }
-      });
-      return;
+    const result = await ctx.gitOps.getBranches('.');
+    if (result && result.length > 0) {
+      branches = result;
     }
-
-    ctx.panel.webview.postMessage({
-      type: 'baseBranchesForCreate',
-      payload: {
-        branches: branches
-      }
-    });
   } catch (error) {
-    console.error('Error getting branches for create:', error);
-    // Fallback to default branches
-    ctx.panel.webview.postMessage({
-      type: 'baseBranchesForCreate',
-      payload: {
-        branches: [
-          { name: 'main', isCurrent: false, isRemote: false },
-          { name: 'master', isCurrent: false, isRemote: false },
-          { name: 'develop', isCurrent: false, isRemote: false }
-        ]
-      }
-    });
+    console.error('[SubmoduleManager] Error getting base branches:', error);
   }
+
+  // Always send the response, whether we got real branches or fallback
+  await sendToWebview(ctx, {
+    type: 'baseBranchesForCreate',
+    payload: { branches }
+  });
 }
 
 /**
@@ -214,7 +213,7 @@ export async function handlePushCreatedBranches(
   }
 
   // Send results to webview
-  ctx.panel.webview.postMessage({
+  await sendToWebview(ctx, {
     type: 'pushResults',
     payload: { results }
   });
@@ -335,42 +334,24 @@ export async function handleGetBranches(
   ctx: MessageHandlerContext,
   payload: { submodule: string }
 ): Promise<void> {
+  let branches = [
+    { name: 'main', isCurrent: false, isRemote: false },
+    { name: 'master', isCurrent: false, isRemote: false }
+  ];
+
   try {
-    const branches = await ctx.gitOps.getBranches(payload.submodule);
-
-    // If no branches found, send fallback
-    if (!branches || branches.length === 0) {
-      console.warn(`No branches found for ${payload.submodule}, using fallback`);
-      ctx.panel.webview.postMessage({
-        type: 'branches',
-        payload: {
-          submodule: payload.submodule,
-          branches: [
-            { name: 'main', isCurrent: false, isRemote: false },
-            { name: 'master', isCurrent: false, isRemote: false }
-          ]
-        }
-      });
-      return;
+    const result = await ctx.gitOps.getBranches(payload.submodule);
+    if (result && result.length > 0) {
+      branches = result;
     }
-
-    ctx.panel.webview.postMessage({
-      type: 'branches',
-      payload: { submodule: payload.submodule, branches }
-    });
   } catch (error) {
-    console.error('Error getting branches:', error);
-    ctx.panel.webview.postMessage({
-      type: 'branches',
-      payload: {
-        submodule: payload.submodule,
-        branches: [
-          { name: 'main', isCurrent: false, isRemote: false },
-          { name: 'master', isCurrent: false, isRemote: false }
-        ]
-      }
-    });
+    console.error('[SubmoduleManager] Error getting branches:', error);
   }
+
+  await sendToWebview(ctx, {
+    type: 'branches',
+    payload: { submodule: payload.submodule, branches }
+  });
 }
 
 /**
@@ -393,7 +374,7 @@ export async function handleGetCommits(
   payload: { submodule: string }
 ): Promise<void> {
   const commits = await ctx.gitOps.getRecentCommits(payload.submodule, 20);
-  ctx.panel.webview.postMessage({
+  await sendToWebview(ctx, {
     type: 'commits',
     payload: { submodule: payload.submodule, commits }
   });
@@ -408,7 +389,7 @@ export async function handleGetRecordedCommit(
 ): Promise<void> {
   const recordedCommit = await ctx.gitOps.getRecordedCommit(payload.submodule);
   const currentCommit = await ctx.gitOps.getCurrentCommit(payload.submodule);
-  ctx.panel.webview.postMessage({
+  await sendToWebview(ctx, {
     type: 'recordedCommit',
     payload: {
       submodule: payload.submodule,
@@ -445,7 +426,7 @@ export async function handleDeleteBranch(
   if (result.success) {
     try {
       const branches = await ctx.gitOps.getBranches(payload.submodule);
-      ctx.panel.webview.postMessage({
+      await sendToWebview(ctx, {
         type: 'branches',
         payload: { submodule: payload.submodule, branches }
       });
@@ -464,7 +445,7 @@ export async function handleSetRebaseStatus(
   ctx: MessageHandlerContext,
   payload: { submodule: string; isRebasing: boolean }
 ): Promise<void> {
-  ctx.panel.webview.postMessage({
+  await sendToWebview(ctx, {
     type: 'rebaseStatusUpdated',
     payload: { submodule: payload.submodule, isRebasing: payload.isRebasing }
   });

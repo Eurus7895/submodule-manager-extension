@@ -93,6 +93,8 @@ export function getScripts(submodules: SubmoduleInfo[]): string {
         // Request branches from first submodule (or main repo)
         postMessage('getBaseBranchesForCreate', {});
         document.getElementById('createBranchModal').classList.add('active');
+        // Retry if branches haven't loaded after 2s
+        retryLoadBaseBranches(3);
       },
 
       closeModal: (el) => {
@@ -143,6 +145,8 @@ export function getScripts(submodules: SubmoduleInfo[]): string {
           cb.checked = selectedSubmodules.has(cb.value);
         });
         document.getElementById('createBranchModal').classList.add('active');
+        // Retry if branches haven't loaded after 2s
+        retryLoadBaseBranches(3);
       },
 
       confirmAndPush: () => {
@@ -661,6 +665,28 @@ export function getScripts(submodules: SubmoduleInfo[]): string {
       resultsDiv.innerHTML = html;
       document.getElementById('reviewBranchName').textContent = branchName;
       document.getElementById('reviewBranchModal').classList.add('active');
+    }
+
+    // Retry mechanism for base branch loading
+    let branchRetryTimer = null;
+    function retryLoadBaseBranches(retriesLeft) {
+      if (branchRetryTimer) {
+        clearTimeout(branchRetryTimer);
+        branchRetryTimer = null;
+      }
+      if (retriesLeft <= 0) return;
+      branchRetryTimer = setTimeout(function() {
+        branchRetryTimer = null;
+        const baseBranchSelect = document.getElementById('baseBranch');
+        if (!baseBranchSelect) return;
+        // Check if still showing loading text (branches not received yet)
+        const firstOption = baseBranchSelect.querySelector('option');
+        if (firstOption && firstOption.textContent.includes('Loading')) {
+          console.log('[SubmoduleManager] Retrying base branch load, retries left:', retriesLeft - 1);
+          postMessage('getBaseBranchesForCreate', {});
+          retryLoadBaseBranches(retriesLeft - 1);
+        }
+      }, 2000);
     }
 
     // Event listeners for branch naming inputs
