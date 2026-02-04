@@ -419,6 +419,18 @@ export async function handleDeleteBranch(
   ctx: MessageHandlerContext,
   payload: { submodule: string; branch: string; deleteRemote: boolean }
 ): Promise<void> {
+  // Confirm deletion with a modal dialog
+  const remoteLabel = payload.deleteRemote ? ' (local + remote)' : '';
+  const confirm = await vscode.window.showWarningMessage(
+    `Delete branch '${payload.branch}' in ${payload.submodule}${remoteLabel}?`,
+    { modal: true },
+    'Delete'
+  );
+
+  if (confirm !== 'Delete') {
+    return;
+  }
+
   const result = await ctx.gitOps.deleteBranch(payload.submodule, payload.branch, payload.deleteRemote);
   showResult(result.success, result.message);
 

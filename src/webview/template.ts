@@ -149,6 +149,17 @@ function renderModals(submodules: SubmoduleInfo[]): string {
         </div>
         <div class="modal-body">
           <div class="form-group">
+            <label class="form-label">Select Repositories</label>
+            <div id="submoduleCheckboxes" style="max-height: 200px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--border); border-radius: 6px; padding: 8px;">
+              ${submodules.map(s => `
+                <label style="display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer;">
+                  <input type="checkbox" class="branch-submodule" value="${s.path}" checked>
+                  <span>${s.name}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div class="form-group">
             <label class="form-label">Base Branch</label>
             <select class="form-select" id="baseBranch">
               <option value="">Loading branches...</option>
@@ -188,17 +199,6 @@ function renderModals(submodules: SubmoduleInfo[]): string {
               bugfix/your-branch-name
             </div>
             <input type="hidden" id="branchName">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Apply to Submodules</label>
-            <div id="submoduleCheckboxes" style="max-height: 200px; overflow-y: auto; margin-top: 8px;">
-              ${submodules.map(s => `
-                <label style="display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer;">
-                  <input type="checkbox" class="branch-submodule" value="${s.path}" checked>
-                  <span>${s.name}</span>
-                </label>
-              `).join('')}
-            </div>
           </div>
         </div>
         <div class="modal-footer">

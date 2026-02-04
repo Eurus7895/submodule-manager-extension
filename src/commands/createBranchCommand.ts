@@ -59,10 +59,28 @@ export function registerCreateBranchCommand(
         return;
       }
 
-      // Get available branches from main repo
+      // Step 1: Select submodules FIRST
+      const items = submodules.map(s => ({
+        label: s.name,
+        description: s.path,
+        picked: true
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        canPickMany: true,
+        placeHolder: 'Select submodules to create branch in',
+        title: 'Step 1: Select Repositories'
+      });
+
+      if (!selected || selected.length === 0) {
+        return;
+      }
+
+      const selectedPaths = selected.map(s => s.description!);
+
+      // Step 2: Get available branches from main repo
       const branches = await gitOps.getBranches('.');
 
-      // Select base branch
       const branchItems = branches
         .filter(b => !b.isRemote)
         .map(b => ({
@@ -73,7 +91,7 @@ export function registerCreateBranchCommand(
 
       const selectedBaseBranch = await vscode.window.showQuickPick(branchItems, {
         placeHolder: 'Select base branch',
-        title: 'Base Branch'
+        title: 'Step 2: Base Branch'
       });
 
       if (!selectedBaseBranch) {
@@ -82,11 +100,10 @@ export function registerCreateBranchCommand(
 
       const baseBranch = selectedBaseBranch.label;
 
-      // Determine allowed prefixes based on base branch
+      // Step 3: Determine allowed prefixes based on base branch
       const branchType = getBaseBranchType(baseBranch);
       const rules = branchHierarchy[branchType] || branchHierarchy['main'];
 
-      // Select prefix
       const prefixItems = rules.prefixes.map(p => ({
         label: `${p}/`,
         description: rules.hint
@@ -94,7 +111,7 @@ export function registerCreateBranchCommand(
 
       const selectedPrefix = await vscode.window.showQuickPick(prefixItems, {
         placeHolder: 'Select branch prefix',
-        title: `Branch Prefix (${rules.hint})`
+        title: `Step 3: Branch Prefix (${rules.hint})`
       });
 
       if (!selectedPrefix) {
@@ -103,13 +120,14 @@ export function registerCreateBranchCommand(
 
       const prefix = selectedPrefix.label;
 
-      // Get branch details based on prefix
+      // Step 4: Get branch details based on prefix
       let branchName = '';
 
       if (prefix === 'release/') {
         const productName = await vscode.window.showInputBox({
           prompt: 'Enter product name',
-          placeHolder: 'HexOGen'
+          placeHolder: 'HexOGen',
+          title: 'Step 4: Branch Details'
         });
         if (!productName) return;
 
@@ -123,7 +141,8 @@ export function registerCreateBranchCommand(
       } else if (prefix === 'dev/') {
         const devName = await vscode.window.showInputBox({
           prompt: 'Enter development branch name',
-          placeHolder: 'sprint-42'
+          placeHolder: 'sprint-42',
+          title: 'Step 4: Branch Details'
         });
         if (!devName) return;
 
@@ -132,7 +151,8 @@ export function registerCreateBranchCommand(
         // bugfix, feature, task
         const ticketId = await vscode.window.showInputBox({
           prompt: 'Enter ticket ID (optional)',
-          placeHolder: 'ECPT-15474'
+          placeHolder: 'ECPT-15474',
+          title: 'Step 4: Branch Details'
         });
 
         const taskTitle = await vscode.window.showInputBox({
@@ -147,24 +167,6 @@ export function registerCreateBranchCommand(
           ? `${prefix}${ticketId}-${kebabTitle}`
           : `${prefix}${kebabTitle}`;
       }
-
-      // Select submodules
-      const items = submodules.map(s => ({
-        label: s.name,
-        description: s.path,
-        picked: true
-      }));
-
-      const selected = await vscode.window.showQuickPick(items, {
-        canPickMany: true,
-        placeHolder: 'Select submodules to create branch in'
-      });
-
-      if (!selected || selected.length === 0) {
-        return;
-      }
-
-      const selectedPaths = selected.map(s => s.description!);
 
       // Create branches
       const result = await vscode.window.withProgress(

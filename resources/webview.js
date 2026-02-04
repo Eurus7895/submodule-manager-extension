@@ -250,10 +250,8 @@
       if (!submodule || !branch) return;
 
       const deleteRemote = confirm('Also delete the remote branch?');
-      const confirmMsg = 'Delete branch "' + branch + '"' + (deleteRemote ? ' (local + remote)' : '') + '?';
-      if (confirm(confirmMsg)) {
-        postMessage('deleteBranch', { submodule, branch, deleteRemote });
-      }
+      // Server-side handler will show a VS Code modal confirmation before actually deleting
+      postMessage('deleteBranch', { submodule, branch, deleteRemote });
     }
   };
 
