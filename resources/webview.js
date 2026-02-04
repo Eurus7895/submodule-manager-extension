@@ -86,7 +86,10 @@
       document.getElementById('productName').value = '';
       document.getElementById('releaseVersion').value = '';
       document.getElementById('devBranchName').value = '';
-      document.getElementById('baseBranch').innerHTML = '<option value="">Loading branches...</option>';
+      document.getElementById('baseBranch').value = '';
+      document.getElementById('baseBranchFilter').value = '';
+      document.getElementById('baseBranchList').innerHTML = '<div class="branch-select-loading">Loading branches...</div>';
+      allBaseBranches = [];
       // Request branches from first submodule (or main repo)
       postMessage('getBaseBranchesForCreate', {});
       document.getElementById('createBranchModal').classList.add('active');
@@ -134,7 +137,10 @@
       document.getElementById('productName').value = '';
       document.getElementById('releaseVersion').value = '';
       document.getElementById('devBranchName').value = '';
-      document.getElementById('baseBranch').innerHTML = '<option value="">Loading branches...</option>';
+      document.getElementById('baseBranch').value = '';
+      document.getElementById('baseBranchFilter').value = '';
+      document.getElementById('baseBranchList').innerHTML = '<div class="branch-select-loading">Loading branches...</div>';
+      allBaseBranches = [];
       // Request branches
       postMessage('getBaseBranchesForCreate', {});
       // Set selected submodules
@@ -444,18 +450,14 @@
         }
 
         case 'baseBranchesForCreate': {
-          const baseBranchSelect = document.getElementById('baseBranch');
           const availableBranches = (message.payload && message.payload.branches) || [];
-          if (baseBranchSelect) {
-            if (availableBranches.length === 0) {
-              baseBranchSelect.innerHTML = '<option value="main">main</option>';
-            } else {
-              baseBranchSelect.innerHTML = availableBranches.map(b =>
-                `<option value="${b.name}">${b.name}${b.isCurrent ? ' (current)' : ''}${b.isRemote ? ' (remote)' : ''}</option>`
-              ).join('');
-            }
-            updatePrefixOptions();
+          if (availableBranches.length === 0) {
+            allBaseBranches = [{ name: 'main', isCurrent: false, isRemote: false }];
+          } else {
+            allBaseBranches = availableBranches;
           }
+          const filterValue = document.getElementById('baseBranchFilter').value;
+          renderBaseBranchList(allBaseBranches, filterValue);
           break;
         }
       }
@@ -517,6 +519,65 @@
 
   // Store created branch info for review
   let pendingBranchInfo = null;
+
+  // Store all base branches for filtering
+  let allBaseBranches = [];
+
+  function renderBaseBranchList(branches, filter) {
+    const listEl = document.getElementById('baseBranchList');
+    if (!listEl) return;
+
+    // Sort alphabetically (current branch first, then alphabetical)
+    const sorted = branches.slice().sort(function (a, b) {
+      if (a.isCurrent && !b.isCurrent) return -1;
+      if (!a.isCurrent && b.isCurrent) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    // Filter by search term
+    const query = (filter || '').toLowerCase().trim();
+    const filtered = query
+      ? sorted.filter(function (b) { return b.name.toLowerCase().includes(query); })
+      : sorted;
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = '<div class="branch-select-empty">No branches match your filter</div>';
+      return;
+    }
+
+    var selectedValue = document.getElementById('baseBranch').value;
+    listEl.innerHTML = filtered.map(function (b) {
+      var isSelected = b.name === selectedValue;
+      var tags = '';
+      if (b.isCurrent) tags += '<span class="branch-select-tag current">current</span>';
+      if (b.isRemote) tags += '<span class="branch-select-tag remote">remote</span>';
+      return '<div class="branch-select-row' + (isSelected ? ' selected' : '') + '" data-branch-name="' + b.name + '">'
+        + '<span class="branch-select-name">' + b.name + '</span>'
+        + tags
+        + '</div>';
+    }).join('');
+
+    // If nothing is selected yet, auto-select the first one
+    if (!selectedValue && filtered.length > 0) {
+      selectBaseBranch(filtered[0].name);
+    }
+  }
+
+  function selectBaseBranch(name) {
+    var hiddenInput = document.getElementById('baseBranch');
+    hiddenInput.value = name;
+
+    // Update visual selection
+    var listEl = document.getElementById('baseBranchList');
+    if (listEl) {
+      listEl.querySelectorAll('.branch-select-row').forEach(function (row) {
+        row.classList.toggle('selected', row.dataset.branchName === name);
+      });
+    }
+
+    // Trigger prefix update
+    updatePrefixOptions();
+  }
 
   function toKebabCase(str) {
     return str
@@ -672,11 +733,11 @@
     if (retriesLeft <= 0) return;
     branchRetryTimer = setTimeout(function () {
       branchRetryTimer = null;
-      const baseBranchSelect = document.getElementById('baseBranch');
-      if (!baseBranchSelect) return;
+      const baseBranchList = document.getElementById('baseBranchList');
+      if (!baseBranchList) return;
       // Check if still showing loading text (branches not received yet)
-      const firstOption = baseBranchSelect.querySelector('option');
-      if (firstOption && firstOption.textContent.includes('Loading')) {
+      const loadingEl = baseBranchList.querySelector('.branch-select-loading');
+      if (loadingEl) {
         console.log('[SubmoduleManager] Retrying base branch load, retries left:', retriesLeft - 1);
         postMessage('getBaseBranchesForCreate', {});
         retryLoadBaseBranches(retriesLeft - 1);
@@ -685,7 +746,15 @@
   }
 
   // Event listeners for branch naming inputs
-  document.getElementById('baseBranch').addEventListener('change', updatePrefixOptions);
+  document.getElementById('baseBranchFilter').addEventListener('input', function (e) {
+    renderBaseBranchList(allBaseBranches, e.target.value);
+  });
+  document.getElementById('baseBranchList').addEventListener('click', function (e) {
+    var row = e.target.closest('.branch-select-row');
+    if (row && row.dataset.branchName) {
+      selectBaseBranch(row.dataset.branchName);
+    }
+  });
   document.getElementById('branchPrefix').addEventListener('change', toggleBranchFormFields);
   document.getElementById('ticketId').addEventListener('input', updateBranchPreview);
   document.getElementById('taskTitle').addEventListener('input', updateBranchPreview);
