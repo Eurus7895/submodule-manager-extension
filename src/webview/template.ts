@@ -161,9 +161,11 @@ function renderModals(submodules: SubmoduleInfo[]): string {
           </div>
           <div class="form-group">
             <label class="form-label">Base Branch</label>
-            <select class="form-select" id="baseBranch">
-              <option value="">Loading branches...</option>
-            </select>
+            <input type="text" class="form-input" id="baseBranchFilter" placeholder="Type to filter branches..." autocomplete="off">
+            <div class="branch-select-list" id="baseBranchList">
+              <div class="branch-select-loading">Loading branches...</div>
+            </div>
+            <input type="hidden" id="baseBranch" value="">
             <div id="baseBranchHint" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;"></div>
           </div>
           <div class="form-group">

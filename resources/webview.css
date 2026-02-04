@@ -507,6 +507,77 @@ h1::before {
   cursor: pointer;
 }
 
+.branch-select-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  margin-top: 6px;
+}
+
+.branch-select-list .branch-select-loading {
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.branch-select-list .branch-select-empty {
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.branch-select-row {
+  display: flex;
+  align-items: center;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s ease;
+  gap: 8px;
+}
+
+.branch-select-row:last-child {
+  border-bottom: none;
+}
+
+.branch-select-row:hover {
+  background: var(--bg-secondary);
+}
+
+.branch-select-row.selected {
+  background: rgba(var(--vscode-button-background), 0.15);
+  background: var(--accent);
+  color: var(--vscode-button-foreground);
+}
+
+.branch-select-row .branch-select-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-select-row .branch-select-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.branch-select-row .branch-select-tag.current {
+  background: rgba(40, 167, 69, 0.15);
+  color: var(--success);
+}
+
+.branch-select-row .branch-select-tag.remote {
+  background: rgba(0, 123, 255, 0.1);
+  color: var(--info);
+}
+
 .modal-footer {
   display: flex;
   justify-content: flex-end;
