@@ -33,6 +33,10 @@ export class SubmoduleTreeProvider implements vscode.TreeDataProvider<SubmoduleT
     }
 
     if (element) {
+      // Handle branches node - fetch and return branch items
+      if (element.itemType === 'branches') {
+        return this.getBranchChildren(element.submodule);
+      }
       // Return details for a specific submodule
       return this.getSubmoduleDetails(element.submodule);
     } else {
@@ -61,9 +65,17 @@ export class SubmoduleTreeProvider implements vscode.TreeDataProvider<SubmoduleT
   private getSubmoduleDetails(submodule: SubmoduleInfo): SubmoduleTreeItem[] {
     const details: SubmoduleTreeItem[] = [];
 
+    // Branches - collapsible node that loads branches on expand
+    details.push(new SubmoduleTreeItem(
+      'Branches',
+      submodule,
+      vscode.TreeItemCollapsibleState.Collapsed,
+      'branches'
+    ));
+
     // Branch info
     details.push(new SubmoduleTreeItem(
-      `Branch: ${submodule.currentBranch || 'detached'}`,
+      `Current: ${submodule.currentBranch || 'detached'}`,
       submodule,
       vscode.TreeItemCollapsibleState.None,
       'branch'
@@ -98,6 +110,36 @@ export class SubmoduleTreeProvider implements vscode.TreeDataProvider<SubmoduleT
     return details;
   }
 
+  private async getBranchChildren(submodule: SubmoduleInfo): Promise<SubmoduleTreeItem[]> {
+    try {
+      const branches = await this.gitOps.getBranches(submodule.path);
+
+      // Show all branches (local and remote) so user can checkout any
+      return branches.map(branch => {
+        const label = branch.name +
+          (branch.isCurrent ? ' (current)' : '') +
+          (branch.isRemote ? ' (remote)' : '');
+        const item = new SubmoduleTreeItem(
+          label,
+          submodule,
+          vscode.TreeItemCollapsibleState.None,
+          'branch-item',
+          branch.name,
+          branch.isCurrent,
+          branch.isRemote
+        );
+        return item;
+      });
+    } catch {
+      return [new SubmoduleTreeItem(
+        'Failed to load branches',
+        submodule,
+        vscode.TreeItemCollapsibleState.None,
+        'status'
+      )];
+    }
+  }
+
   private getStatusLabel(status: SubmoduleStatus): string {
     const labels: Record<SubmoduleStatus, string> = {
       'clean': 'Clean',
@@ -125,7 +167,10 @@ export class SubmoduleTreeItem extends vscode.TreeItem {
     public readonly label: string,
     public readonly submodule: SubmoduleInfo,
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly itemType: 'submodule' | 'branch' | 'commit' | 'status' | 'sync' = 'submodule'
+    public readonly itemType: 'submodule' | 'branch' | 'commit' | 'status' | 'sync' | 'branches' | 'branch-item' = 'submodule',
+    public readonly branchName?: string,
+    public readonly isCurrent?: boolean,
+    public readonly isRemote?: boolean
   ) {
     super(label, collapsibleState);
 
@@ -134,6 +179,21 @@ export class SubmoduleTreeItem extends vscode.TreeItem {
       this.tooltip = this.createTooltip();
       this.iconPath = this.getIcon();
       this.description = this.getDescription();
+    } else if (itemType === 'branch-item') {
+      this.contextValue = 'branchItem';
+      if (this.isCurrent) {
+        this.iconPath = new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'));
+      } else if (this.isRemote) {
+        this.iconPath = new vscode.ThemeIcon('cloud', new vscode.ThemeColor('gitDecoration.untrackedResourceForeground'));
+      } else {
+        this.iconPath = new vscode.ThemeIcon('git-branch');
+      }
+      this.tooltip = `Click to checkout branch: ${this.branchName}${this.isRemote ? ' (will create local tracking branch)' : ''}`;
+      this.command = {
+        title: 'Checkout Branch',
+        command: 'submoduleManager.checkoutBranchFromTree',
+        arguments: [this.submodule.path, this.branchName]
+      };
     } else {
       this.contextValue = itemType;
       this.iconPath = this.getDetailIcon();
@@ -174,6 +234,8 @@ export class SubmoduleTreeItem extends vscode.TreeItem {
     switch (this.itemType) {
       case 'branch':
         return new vscode.ThemeIcon('git-branch');
+      case 'branches':
+        return new vscode.ThemeIcon('list-tree');
       case 'commit':
         return new vscode.ThemeIcon('git-commit');
       case 'status':
@@ -224,6 +286,8 @@ export class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeIt
         'Open the Submodule Manager webview panel'),
       new ActionTreeItem('Create Branch', 'submoduleManager.createBranch', 'git-branch',
         'Create a new branch across multiple submodules'),
+      new ActionTreeItem('Delete Branch', 'submoduleManager.deleteBranchAcrossSubmodules', 'trash',
+        'Delete a branch across multiple submodules'),
       new ActionTreeItem('Sync Versions', 'submoduleManager.syncVersions', 'sync',
         'Sync all submodules to the commits recorded in the parent repository'),
       new ActionTreeItem('Initialize All', 'submoduleManager.initSubmodules', 'cloud-download',
