@@ -89,6 +89,24 @@
         "command": "submoduleManager.stageSubmodule",
         "title": "Stage Submodule Changes",
         "category": "Submodule Manager"
+      },
+      {
+        "command": "submoduleManager.deleteBranch",
+        "title": "Delete Branch",
+        "category": "Submodule Manager",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "submoduleManager.deleteBranchFromTree",
+        "title": "Delete Branch",
+        "category": "Submodule Manager",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "submoduleManager.deleteBranchAcrossSubmodules",
+        "title": "Delete Branch Across Submodules",
+        "category": "Submodule Manager",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -170,6 +188,21 @@
           "command": "submoduleManager.stageSubmodule",
           "when": "view == submoduleList && viewItem == submodule",
           "group": "3_git@1"
+        },
+        {
+          "command": "submoduleManager.deleteBranch",
+          "when": "view == submoduleList && viewItem == submodule",
+          "group": "1_actions@4"
+        },
+        {
+          "command": "submoduleManager.deleteBranchFromTree",
+          "when": "view == submoduleList && viewItem == branchItem",
+          "group": "inline"
+        },
+        {
+          "command": "submoduleManager.deleteBranchFromTree",
+          "when": "view == submoduleList && viewItem == branchItem",
+          "group": "1_actions@1"
         }
       ],
       "commandPalette": [
