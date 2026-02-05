@@ -87,14 +87,18 @@ export class SubmoduleManagerPanel {
   private async _update(fullRefresh: boolean = true) {
     const submodules = await this._gitOps.getSubmodules();
 
+    // Get parent repo info and prepend it to the list
+    const parentRepo = await this._gitOps.getParentRepoInfo();
+    const allRepos = parentRepo ? [parentRepo, ...submodules] : submodules;
+
     if (fullRefresh) {
       const resourceUris = this._getResourceUris();
-      this._panel.webview.html = getHtmlForWebview(submodules, resourceUris);
+      this._panel.webview.html = getHtmlForWebview(allRepos, resourceUris);
     } else {
       // Send data update instead of regenerating HTML
       this._panel.webview.postMessage({
         type: 'updateSubmodules',
-        payload: { submodules }
+        payload: { submodules: allRepos }
       });
     }
   }

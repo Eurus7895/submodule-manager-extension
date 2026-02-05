@@ -11,6 +11,101 @@ export class SubmoduleService {
   constructor(private gitCmd: GitCommandService) {}
 
   /**
+   * Get information about the parent (main) repository
+   */
+  async getParentRepoInfo(): Promise<SubmoduleInfo | null> {
+    const workspaceRoot = this.gitCmd.getWorkspaceRoot();
+
+    try {
+      // Check if it's a git repo
+      await this.gitCmd.execGit(['rev-parse', '--git-dir']);
+
+      // Get repo name from the root folder or remote URL
+      let name = 'Parent Repository';
+      try {
+        const remoteUrl = await this.gitCmd.execGit(['remote', 'get-url', 'origin']);
+        const match = remoteUrl.match(/\/([^/]+?)(\.git)?$/);
+        if (match) {
+          name = match[1];
+        }
+      } catch {
+        // Use folder name if no remote
+        name = path.basename(workspaceRoot);
+      }
+
+      // Get current commit
+      let currentCommit = '';
+      try {
+        currentCommit = await this.gitCmd.execGit(['rev-parse', 'HEAD']);
+      } catch {
+        // No commits yet
+      }
+
+      // Get current branch
+      let currentBranch = '';
+      let status: SubmoduleStatus = 'unknown';
+      try {
+        currentBranch = await this.gitCmd.execGit(['rev-parse', '--abbrev-ref', 'HEAD']);
+        if (currentBranch === 'HEAD') {
+          currentBranch = '';
+          status = 'detached';
+        }
+      } catch {
+        currentBranch = '';
+        status = 'detached';
+      }
+
+      // Check for changes
+      let hasChanges = false;
+      try {
+        const statusOutput = await this.gitCmd.execGit(['status', '--porcelain']);
+        hasChanges = statusOutput.trim().length > 0;
+      } catch {
+        // Ignore
+      }
+
+      // Determine final status
+      if (hasChanges) {
+        status = 'modified';
+      } else if (status !== 'detached') {
+        status = 'clean';
+      }
+
+      // Get ahead/behind counts
+      let ahead = 0;
+      let behind = 0;
+      if (currentBranch && currentBranch !== 'HEAD') {
+        try {
+          const tracking = await this.gitCmd.execGit(
+            ['rev-list', '--left-right', '--count', `origin/${currentBranch}...HEAD`]
+          );
+          const [behindStr, aheadStr] = tracking.split('\t');
+          behind = parseInt(behindStr, 10) || 0;
+          ahead = parseInt(aheadStr, 10) || 0;
+        } catch {
+          // No tracking branch
+        }
+      }
+
+      return {
+        name,
+        path: '.', // Use '.' to indicate the root/parent repo
+        url: '',
+        branch: currentBranch || 'main',
+        currentCommit: currentCommit.substring(0, 8),
+        currentBranch,
+        status,
+        hasChanges,
+        ahead,
+        behind,
+        isParentRepo: true
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Get list of all submodules
    */
   async getSubmodules(): Promise<SubmoduleInfo[]> {

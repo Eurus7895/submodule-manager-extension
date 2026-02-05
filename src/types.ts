@@ -14,6 +14,7 @@ export interface SubmoduleInfo {
   ahead: number;
   behind: number;
   lastUpdated?: Date;
+  isParentRepo?: boolean;
 }
 
 export type SubmoduleStatus =

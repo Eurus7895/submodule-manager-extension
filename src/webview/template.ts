@@ -55,12 +55,17 @@ export function renderSubmoduleRow(submodule: SubmoduleInfo, index: number): str
     ? `Currently on branch: ${submodule.currentBranch}`
     : `Detached HEAD: Not on any branch, checked out to commit ${submodule.currentCommit}`;
 
+  const isParent = submodule.isParentRepo === true;
+  const cardClass = isParent ? 'submodule-card parent-repo' : 'submodule-card';
+  const parentBadge = isParent ? '<span class="parent-badge">PARENT</span>' : '';
+  const pathDisplay = isParent ? '(root)' : submodule.path;
+
   return `
-    <div class="submodule-card" data-name="${submodule.name}" data-path="${submodule.path}" style="animation-delay: ${index * 0.02}s">
+    <div class="${cardClass}" data-name="${submodule.name}" data-path="${submodule.path}" style="animation-delay: ${index * 0.02}s">
       <div class="submodule-row">
         <input type="checkbox" class="row-checkbox" data-action="toggleSelection" data-submodule="${submodule.path}">
-        <span class="row-name" title="${submodule.name}">${submodule.name}</span>
-        <span class="row-path" title="${submodule.path}">${submodule.path}</span>
+        <span class="row-name" title="${submodule.name}">${submodule.name}${parentBadge}</span>
+        <span class="row-path" title="${submodule.path}">${pathDisplay}</span>
         <span class="row-branch branch" title="${branchTooltip}">${branchDisplay}</span>
         <span class="row-commit commit">${submodule.currentCommit || 'N/A'}</span>
         <span class="row-status ${statusClass}" title="${statusTooltip}">${statusIcon} ${submodule.status.toUpperCase()}</span>
@@ -71,11 +76,11 @@ export function renderSubmoduleRow(submodule: SubmoduleInfo, index: number): str
         <span class="rebase-badge rebase-indicator" style="display: none;">REBASING</span>
         <div class="row-actions">
           <button class="btn btn-sm" data-action="toggleBranches" data-submodule="${submodule.path}" title="Show branches">⎇</button>
-          <button class="btn btn-sm" data-action="openCommitModal" data-submodule="${submodule.path}" title="Checkout specific commit">⎔</button>
+          ${!isParent ? `<button class="btn btn-sm" data-action="openCommitModal" data-submodule="${submodule.path}" title="Checkout specific commit">⎔</button>` : ''}
           <button class="btn btn-sm" data-action="pullChanges" data-submodule="${submodule.path}" title="Pull changes">↓</button>
           <button class="btn btn-sm" data-action="pushChanges" data-submodule="${submodule.path}" title="Push changes">↑</button>
           <button class="btn btn-sm" data-action="openSubmodule" data-submodule="${submodule.path}" title="Open in explorer">📂</button>
-          ${submodule.hasChanges ? `<button class="btn btn-sm" data-action="stageSubmodule" data-submodule="${submodule.path}" title="Stage submodule pointer">+</button>` : ''}
+          ${submodule.hasChanges && !isParent ? `<button class="btn btn-sm" data-action="stageSubmodule" data-submodule="${submodule.path}" title="Stage submodule pointer">+</button>` : ''}
         </div>
       </div>
       <div class="branches-panel" id="branches-${submodule.path.replace(/[/.]/g, '-')}" style="display: none;">
@@ -89,26 +94,29 @@ export function renderSubmoduleRow(submodule: SubmoduleInfo, index: number): str
  * Render the stats section
  */
 function renderStats(submodules: SubmoduleInfo[]): string {
+  // Filter out parent repo for stats calculation
+  const submodulesOnly = submodules.filter(s => !s.isParentRepo);
+
   return `
     <div class="stats">
       <div class="stat-card" title="Total number of submodules configured in this repository">
         <div class="stat-label">Total Submodules</div>
-        <div class="stat-value">${submodules.length}</div>
+        <div class="stat-value">${submodulesOnly.length}</div>
         <div class="stat-desc">All configured submodules</div>
       </div>
       <div class="stat-card" title="Submodules on a branch with no uncommitted changes">
         <div class="stat-label">Clean</div>
-        <div class="stat-value success">${submodules.filter(s => s.status === 'clean').length}</div>
+        <div class="stat-value success">${submodulesOnly.filter(s => s.status === 'clean').length}</div>
         <div class="stat-desc">On branch, no changes</div>
       </div>
       <div class="stat-card" title="Submodules with uncommitted changes (staged or unstaged files)">
         <div class="stat-label">Modified</div>
-        <div class="stat-value warning">${submodules.filter(s => s.status === 'modified').length}</div>
+        <div class="stat-value warning">${submodulesOnly.filter(s => s.status === 'modified').length}</div>
         <div class="stat-desc">Has uncommitted changes</div>
       </div>
       <div class="stat-card" title="Submodules that are detached (not on a branch), uninitialized, or have conflicts">
         <div class="stat-label">Needs Attention</div>
-        <div class="stat-value error">${submodules.filter(s => ['uninitialized', 'conflict', 'detached'].includes(s.status)).length}</div>
+        <div class="stat-value error">${submodulesOnly.filter(s => ['uninitialized', 'conflict', 'detached'].includes(s.status)).length}</div>
         <div class="stat-desc">Detached, uninitialized, or conflict</div>
       </div>
     </div>
@@ -154,16 +162,19 @@ function renderModals(submodules: SubmoduleInfo[]): string {
               ${submodules.map(s => `
                 <label style="display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer;">
                   <input type="checkbox" class="branch-submodule" value="${s.path}" checked>
-                  <span>${s.name}</span>
+                  <span>${s.name}${s.isParentRepo ? ' <span class="parent-badge">PARENT</span>' : ''}</span>
                 </label>
               `).join('')}
             </div>
           </div>
           <div class="form-group">
             <label class="form-label">Base Branch</label>
-            <input type="text" class="form-input" id="baseBranchFilter" placeholder="Type to filter branches..." autocomplete="off">
-            <div class="branch-select-list" id="baseBranchList">
-              <div class="branch-select-loading">Loading branches...</div>
+            <div class="branch-dropdown" id="baseBranchDropdown">
+              <input type="text" class="branch-dropdown-input" id="baseBranchInput" placeholder="Loading branches..." readonly>
+              <span class="branch-dropdown-arrow">▼</span>
+              <div class="branch-dropdown-list" id="baseBranchList">
+                <!-- Populated dynamically -->
+              </div>
             </div>
             <input type="hidden" id="baseBranch" value="">
             <div id="baseBranchHint" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;"></div>
