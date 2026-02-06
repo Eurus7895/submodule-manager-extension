@@ -242,6 +242,38 @@ h1::before {
   font-size: 12px;
   cursor: pointer;
   transition: all 0.15s ease;
+  max-width: 100%;
+}
+
+.branch-item .branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.branch-item .branch-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+
+.branch-item .branch-tag.tag-current {
+  background: rgba(40, 167, 69, 0.2);
+  color: var(--success);
+}
+
+.branch-item .branch-tag.tag-remote {
+  background: rgba(0, 123, 255, 0.2);
+  color: var(--info);
+}
+
+.branch-item .branch-tag.tag-local {
+  background: rgba(108, 117, 125, 0.2);
+  color: var(--text-secondary);
 }
 
 .branch-item:hover {
@@ -668,4 +700,120 @@ h1::before {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* Custom branch dropdown styles */
+.branch-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.branch-dropdown-input {
+  width: 100%;
+  padding: 10px 12px;
+  padding-right: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.branch-dropdown-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.branch-dropdown-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.branch-dropdown-list {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  z-index: 100;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.branch-dropdown.open .branch-dropdown-list {
+  display: block;
+}
+
+.branch-dropdown.open .branch-dropdown-input {
+  border-radius: 6px 6px 0 0;
+  border-color: var(--accent);
+}
+
+.branch-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.1s ease;
+}
+
+.branch-dropdown-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.branch-dropdown-item.selected {
+  background: rgba(0, 123, 255, 0.1);
+}
+
+.branch-dropdown-item .branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.branch-dropdown-item .branch-tags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.branch-dropdown-item .branch-tag {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* Parent repository card styling */
+.submodule-card.parent-repo {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.submodule-card.parent-repo .row-name {
+  color: var(--accent);
+}
+
+.parent-badge {
+  background: var(--accent);
+  color: var(--vscode-button-foreground);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  margin-left: 8px;
 }

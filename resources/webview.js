@@ -87,9 +87,19 @@
       document.getElementById('releaseVersion').value = '';
       document.getElementById('devBranchName').value = '';
       document.getElementById('baseBranch').value = '';
-      document.getElementById('baseBranchFilter').value = '';
-      document.getElementById('baseBranchList').innerHTML = '<div class="branch-select-loading">Loading branches...</div>';
-      allBaseBranches = [];
+      const baseBranchInput = document.getElementById('baseBranchInput');
+      if (baseBranchInput) {
+        baseBranchInput.value = '';
+        baseBranchInput.placeholder = 'Loading branches...';
+      }
+      const baseBranchList = document.getElementById('baseBranchList');
+      if (baseBranchList) {
+        baseBranchList.innerHTML = '';
+      }
+      const baseBranchDropdown = document.getElementById('baseBranchDropdown');
+      if (baseBranchDropdown) {
+        baseBranchDropdown.classList.remove('open');
+      }
       // Request branches from first submodule (or main repo)
       postMessage('getBaseBranchesForCreate', {});
       document.getElementById('createBranchModal').classList.add('active');
@@ -138,9 +148,19 @@
       document.getElementById('releaseVersion').value = '';
       document.getElementById('devBranchName').value = '';
       document.getElementById('baseBranch').value = '';
-      document.getElementById('baseBranchFilter').value = '';
-      document.getElementById('baseBranchList').innerHTML = '<div class="branch-select-loading">Loading branches...</div>';
-      allBaseBranches = [];
+      const baseBranchInput = document.getElementById('baseBranchInput');
+      if (baseBranchInput) {
+        baseBranchInput.value = '';
+        baseBranchInput.placeholder = 'Loading branches...';
+      }
+      const baseBranchList = document.getElementById('baseBranchList');
+      if (baseBranchList) {
+        baseBranchList.innerHTML = '';
+      }
+      const baseBranchDropdown = document.getElementById('baseBranchDropdown');
+      if (baseBranchDropdown) {
+        baseBranchDropdown.classList.remove('open');
+      }
       // Request branches
       postMessage('getBaseBranchesForCreate', {});
       // Set selected submodules
@@ -377,13 +397,22 @@
               if (branches.length === 0) {
                 panel.innerHTML = '<div class="branches-loading">No branches found</div>';
               } else {
-                panel.innerHTML = '<div class="branches-list">' + branches.map(b =>
-                  `<span class="branch-item ${b.isCurrent ? 'current' : ''} ${b.isRemote ? 'remote' : ''}">
+                panel.innerHTML = '<div class="branches-list">' + branches.map(b => {
+                  let tagHtml = '';
+                  if (b.isCurrent) {
+                    tagHtml = '<span class="branch-tag tag-current">current</span>';
+                  } else if (b.isRemote) {
+                    tagHtml = '<span class="branch-tag tag-remote">remote</span>';
+                  } else {
+                    tagHtml = '<span class="branch-tag tag-local">local</span>';
+                  }
+                  return `<span class="branch-item ${b.isCurrent ? 'current' : ''} ${b.isRemote ? 'remote' : ''}">
                     <span class="branch-icon" data-action="checkoutBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Checkout ${b.name}">${b.isCurrent ? '\u2713' : (b.isRemote ? '\u2601' : '\u238B')}</span>
-                    <span data-action="checkoutBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Checkout ${b.name}">${b.name}${b.isRemote ? ' (remote)' : ''}</span>
+                    <span class="branch-name" data-action="checkoutBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Checkout ${b.name}">${b.name}</span>
+                    ${tagHtml}
                     ${!b.isCurrent ? `<span class="branch-delete" data-action="deleteBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Delete ${b.name}">\u2715</span>` : ''}
-                  </span>`
-                ).join('') + '</div>';
+                  </span>`;
+                }).join('') + '</div>';
               }
             }
           }
@@ -450,14 +479,42 @@
         }
 
         case 'baseBranchesForCreate': {
+          const baseBranchHidden = document.getElementById('baseBranch');
+          const baseBranchInput = document.getElementById('baseBranchInput');
+          const baseBranchList = document.getElementById('baseBranchList');
           const availableBranches = (message.payload && message.payload.branches) || [];
-          if (availableBranches.length === 0) {
-            allBaseBranches = [{ name: 'main', isCurrent: false, isRemote: false }];
-          } else {
-            allBaseBranches = availableBranches;
+
+          if (baseBranchList && baseBranchInput && baseBranchHidden) {
+            if (availableBranches.length === 0) {
+              baseBranchList.innerHTML = '<div class="branch-dropdown-item" data-value="main"><span class="branch-name">main</span></div>';
+              baseBranchInput.value = 'main';
+              baseBranchHidden.value = 'main';
+            } else {
+              baseBranchList.innerHTML = availableBranches.map(b => {
+                let tags = '';
+                if (b.isCurrent) {
+                  tags += '<span class="branch-tag tag-current">current</span>';
+                }
+                if (b.isRemote) {
+                  tags += '<span class="branch-tag tag-remote">remote</span>';
+                }
+                if (!b.isCurrent && !b.isRemote) {
+                  tags += '<span class="branch-tag tag-local">local</span>';
+                }
+                return `<div class="branch-dropdown-item" data-value="${b.name}">
+                  <span class="branch-name">${b.name}</span>
+                  <span class="branch-tags">${tags}</span>
+                </div>`;
+              }).join('');
+
+              // Set default value to first branch
+              const firstBranch = availableBranches[0];
+              baseBranchInput.value = firstBranch.name;
+              baseBranchHidden.value = firstBranch.name;
+            }
+            baseBranchInput.placeholder = 'Select base branch...';
+            updatePrefixOptions();
           }
-          const filterValue = document.getElementById('baseBranchFilter').value;
-          renderBaseBranchList(allBaseBranches, filterValue);
           break;
         }
       }
@@ -520,65 +577,6 @@
   // Store created branch info for review
   let pendingBranchInfo = null;
 
-  // Store all base branches for filtering
-  let allBaseBranches = [];
-
-  function renderBaseBranchList(branches, filter) {
-    const listEl = document.getElementById('baseBranchList');
-    if (!listEl) return;
-
-    // Sort alphabetically (current branch first, then alphabetical)
-    const sorted = branches.slice().sort(function (a, b) {
-      if (a.isCurrent && !b.isCurrent) return -1;
-      if (!a.isCurrent && b.isCurrent) return 1;
-      return a.name.localeCompare(b.name);
-    });
-
-    // Filter by search term
-    const query = (filter || '').toLowerCase().trim();
-    const filtered = query
-      ? sorted.filter(function (b) { return b.name.toLowerCase().includes(query); })
-      : sorted;
-
-    if (filtered.length === 0) {
-      listEl.innerHTML = '<div class="branch-select-empty">No branches match your filter</div>';
-      return;
-    }
-
-    var selectedValue = document.getElementById('baseBranch').value;
-    listEl.innerHTML = filtered.map(function (b) {
-      var isSelected = b.name === selectedValue;
-      var tags = '';
-      if (b.isCurrent) tags += '<span class="branch-select-tag current">current</span>';
-      if (b.isRemote) tags += '<span class="branch-select-tag remote">remote</span>';
-      return '<div class="branch-select-row' + (isSelected ? ' selected' : '') + '" data-branch-name="' + b.name + '">'
-        + '<span class="branch-select-name">' + b.name + '</span>'
-        + tags
-        + '</div>';
-    }).join('');
-
-    // If nothing is selected yet, auto-select the first one
-    if (!selectedValue && filtered.length > 0) {
-      selectBaseBranch(filtered[0].name);
-    }
-  }
-
-  function selectBaseBranch(name) {
-    var hiddenInput = document.getElementById('baseBranch');
-    hiddenInput.value = name;
-
-    // Update visual selection
-    var listEl = document.getElementById('baseBranchList');
-    if (listEl) {
-      listEl.querySelectorAll('.branch-select-row').forEach(function (row) {
-        row.classList.toggle('selected', row.dataset.branchName === name);
-      });
-    }
-
-    // Trigger prefix update
-    updatePrefixOptions();
-  }
-
   function toKebabCase(str) {
     return str
       .toLowerCase()
@@ -597,7 +595,8 @@
   }
 
   function updatePrefixOptions() {
-    const baseBranch = document.getElementById('baseBranch').value.trim() || 'main';
+    const baseBranchEl = document.getElementById('baseBranch');
+    const baseBranch = (baseBranchEl ? baseBranchEl.value.trim() : '') || 'main';
     const branchType = getBaseBranchType(baseBranch);
     const rules = branchHierarchy[branchType] || branchHierarchy['main'];
 
@@ -746,15 +745,6 @@
   }
 
   // Event listeners for branch naming inputs
-  document.getElementById('baseBranchFilter').addEventListener('input', function (e) {
-    renderBaseBranchList(allBaseBranches, e.target.value);
-  });
-  document.getElementById('baseBranchList').addEventListener('click', function (e) {
-    var row = e.target.closest('.branch-select-row');
-    if (row && row.dataset.branchName) {
-      selectBaseBranch(row.dataset.branchName);
-    }
-  });
   document.getElementById('branchPrefix').addEventListener('change', toggleBranchFormFields);
   document.getElementById('ticketId').addEventListener('input', updateBranchPreview);
   document.getElementById('taskTitle').addEventListener('input', updateBranchPreview);
@@ -762,7 +752,48 @@
   document.getElementById('releaseVersion').addEventListener('input', updateBranchPreview);
   document.getElementById('devBranchName').addEventListener('input', updateBranchPreview);
 
+  // Custom branch dropdown event handlers
+  const baseBranchDropdown = document.getElementById('baseBranchDropdown');
+  const baseBranchInput = document.getElementById('baseBranchInput');
+  const baseBranchList = document.getElementById('baseBranchList');
+  const baseBranchHidden = document.getElementById('baseBranch');
+
+  if (baseBranchInput && baseBranchDropdown) {
+    // Toggle dropdown on input click
+    baseBranchInput.addEventListener('click', function(e) {
+      e.stopPropagation();
+      baseBranchDropdown.classList.toggle('open');
+    });
+
+    // Handle branch selection
+    baseBranchList.addEventListener('click', function(e) {
+      const item = e.target.closest('.branch-dropdown-item');
+      if (item) {
+        const value = item.dataset.value;
+        baseBranchInput.value = value;
+        baseBranchHidden.value = value;
+        baseBranchDropdown.classList.remove('open');
+        updatePrefixOptions();
+      }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!baseBranchDropdown.contains(e.target)) {
+        baseBranchDropdown.classList.remove('open');
+      }
+    });
+  }
+
+  // Ensure all branch panels are closed on load
+  function closeAllBranchPanels() {
+    document.querySelectorAll('.branches-panel').forEach(panel => {
+      panel.style.display = 'none';
+    });
+  }
+
   // Initialize UI on load
   updateSelectionUI();
   updateRebaseUI();
+  closeAllBranchPanels();
 })();
