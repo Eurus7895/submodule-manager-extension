@@ -81,10 +81,37 @@ h1::before {
   transition: all 0.2s ease;
   background: var(--bg-tertiary);
   color: var(--text-primary);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
 }
 
 .btn:hover {
   background: var(--border);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
+  transition: all 0.08s ease;
+}
+
+.btn .btn-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(0);
+  animation: ripple-effect 0.5s ease-out;
+  pointer-events: none;
+}
+
+@keyframes ripple-effect {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
 }
 
 .btn-primary {
@@ -94,6 +121,15 @@ h1::before {
 
 .btn-primary:hover {
   background: var(--accent-hover);
+  box-shadow: 0 2px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-primary:active {
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.2);
+}
+
+.btn-primary .btn-ripple {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .btn-sm {
@@ -219,6 +255,34 @@ h1::before {
   border-radius: 0 0 6px 6px;
 }
 
+.branches-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.branches-filter-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.branches-filter-input:focus {
+  border-color: var(--accent);
+}
+
+.branches-filter-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .branches-loading {
   color: var(--text-secondary);
   font-size: 12px;
@@ -227,22 +291,43 @@ h1::before {
 
 .branches-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.branches-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.branches-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.branches-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.branches-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .branch-item {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 8px;
+  padding: 6px 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.15s ease;
-  max-width: 100%;
+  width: 100%;
+  min-height: 32px;
 }
 
 .branch-item .branch-name {
@@ -303,11 +388,12 @@ h1::before {
 .branch-item .branch-delete {
   font-size: 10px;
   color: var(--text-muted);
-  margin-left: 4px;
-  padding: 2px 4px;
+  margin-left: auto;
+  padding: 2px 6px;
   border-radius: 3px;
   opacity: 0;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .branch-item:hover .branch-delete {
@@ -397,6 +483,20 @@ h1::before {
 .row-actions .btn {
   padding: 4px 8px;
   font-size: 11px;
+  transition: all 0.15s ease;
+}
+
+.row-actions .btn:hover {
+  transform: translateY(-2px) scale(1.1);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+  background: var(--accent);
+  color: var(--vscode-button-foreground);
+}
+
+.row-actions .btn:active {
+  transform: translateY(0) scale(0.95);
+  box-shadow: none;
+  transition: all 0.06s ease;
 }
 
 .rebase-badge {
@@ -797,6 +897,62 @@ h1::before {
   font-size: 10px;
   padding: 1px 4px;
   border-radius: 3px;
+}
+
+/* Workspace folder selector */
+.workspace-folder-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.workspace-folder-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.workspace-folder-selector {
+  flex-shrink: 0;
+}
+
+.workspace-folder-select {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.workspace-folder-select:hover {
+  border-color: var(--accent);
+}
+
+.workspace-folder-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+}
+
+.workspace-folder-path {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--vscode-editor-font-family);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 /* Parent repository card styling */

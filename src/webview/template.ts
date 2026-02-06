@@ -14,6 +14,15 @@ export interface WebviewResourceUris {
 }
 
 /**
+ * Workspace folder info for folder selector
+ */
+export interface WorkspaceFolderInfo {
+  name: string;
+  path: string;
+  isCurrent: boolean;
+}
+
+/**
  * Get status icon for submodule status
  */
 function getStatusIcon(status: string): string {
@@ -317,9 +326,37 @@ function getNonce(): string {
 }
 
 /**
+ * Render workspace folder selector (only shown if multiple folders exist)
+ */
+function renderWorkspaceFolderSelector(folders: WorkspaceFolderInfo[]): string {
+  if (folders.length <= 1) {
+    return '';
+  }
+
+  const currentFolder = folders.find(f => f.isCurrent);
+  const currentName = currentFolder ? currentFolder.name : 'Unknown';
+
+  return `
+    <div class="workspace-folder-bar">
+      <span class="workspace-folder-label">Workspace Folder:</span>
+      <div class="workspace-folder-selector">
+        <select class="workspace-folder-select" id="workspaceFolderSelect">
+          ${folders.map(f => `
+            <option value="${f.path}" ${f.isCurrent ? 'selected' : ''} title="${f.path}">
+              ${f.name}
+            </option>
+          `).join('')}
+        </select>
+      </div>
+      <span class="workspace-folder-path" title="${currentFolder?.path || ''}">${currentFolder?.path || ''}</span>
+    </div>
+  `;
+}
+
+/**
  * Generate the full HTML for the webview
  */
-export function getHtmlForWebview(submodules: SubmoduleInfo[], resourceUris: WebviewResourceUris): string {
+export function getHtmlForWebview(submodules: SubmoduleInfo[], resourceUris: WebviewResourceUris, workspaceFolders: WorkspaceFolderInfo[] = []): string {
   const nonce = getNonce();
 
   return `<!DOCTYPE html>
@@ -340,6 +377,8 @@ export function getHtmlForWebview(submodules: SubmoduleInfo[], resourceUris: Web
         <button class="btn btn-primary" data-action="openCreateBranchModal">+ Create Branch</button>
       </div>
     </header>
+
+    ${renderWorkspaceFolderSelector(workspaceFolders)}
 
     ${renderStats(submodules)}
 
