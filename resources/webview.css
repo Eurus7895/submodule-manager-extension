@@ -246,6 +246,11 @@ h1::before {
   align-items: center;
   padding: 12px 16px;
   gap: 16px;
+  cursor: pointer;
+}
+
+.submodule-card.branches-open > .submodule-row {
+  background: rgba(0, 123, 255, 0.04);
 }
 
 .branches-panel {
@@ -368,7 +373,10 @@ h1::before {
 
 .branch-item.current {
   border-color: var(--success);
-  background: rgba(40, 167, 69, 0.1);
+  background: rgba(40, 167, 69, 0.12);
+  border-left: 3px solid var(--success);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(40, 167, 69, 0.15);
 }
 
 .branch-item.remote {

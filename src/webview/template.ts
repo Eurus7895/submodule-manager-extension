@@ -84,7 +84,6 @@ export function renderSubmoduleRow(submodule: SubmoduleInfo, index: number): str
         </div>
         <span class="rebase-badge rebase-indicator" style="display: none;">REBASING</span>
         <div class="row-actions">
-          <button class="btn btn-sm" data-action="toggleBranches" data-submodule="${submodule.path}" title="Show branches">⎇</button>
           ${!isParent ? `<button class="btn btn-sm" data-action="openCommitModal" data-submodule="${submodule.path}" title="Checkout specific commit">⎔</button>` : ''}
           <button class="btn btn-sm" data-action="pullChanges" data-submodule="${submodule.path}" title="Pull changes">↓</button>
           <button class="btn btn-sm" data-action="pushChanges" data-submodule="${submodule.path}" title="Push changes">↑</button>

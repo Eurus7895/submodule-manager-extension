@@ -253,12 +253,15 @@
       const panel = document.getElementById(panelId);
       if (!panel) return;
 
+      const card = panel.closest('.submodule-card');
       if (panel.style.display === 'none') {
         panel.style.display = 'block';
         panel.innerHTML = '<div class="branches-loading">Loading branches...</div>';
+        if (card) card.classList.add('branches-open');
         postMessage('getBranches', { submodule });
       } else {
         panel.style.display = 'none';
+        if (card) card.classList.remove('branches-open');
       }
     },
 
@@ -331,6 +334,17 @@
         return;
       }
       el = el.parentElement;
+    }
+
+    // If no action was found, check if the click was on a submodule row to toggle branches
+    const row = e.target.closest('.submodule-row');
+    if (row) {
+      const card = row.closest('.submodule-card');
+      if (card && card.dataset.path) {
+        // Don't toggle if clicked on a button, input, or link
+        if (e.target.closest('.row-actions') || e.target.closest('.row-checkbox')) return;
+        actions.toggleBranches({ dataset: { submodule: card.dataset.path } });
+      }
     }
   });
 
@@ -437,8 +451,14 @@
                     tagHtml = '<span class="branch-tag tag-current">current</span>';
                   } else if (b.isRemote) {
                     tagHtml = '<span class="branch-tag tag-remote">remote</span>';
+                    if (b.hasLocal) {
+                      tagHtml += '<span class="branch-tag tag-local">local</span>';
+                    }
                   } else {
                     tagHtml = '<span class="branch-tag tag-local">local</span>';
+                    if (b.hasRemote) {
+                      tagHtml += '<span class="branch-tag tag-remote">remote</span>';
+                    }
                   }
                   return `<div class="branch-item ${b.isCurrent ? 'current' : ''} ${b.isRemote ? 'remote' : ''}" data-branch-name="${b.name.toLowerCase()}">
                     <span class="branch-icon" data-action="checkoutBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Checkout ${b.name}">${b.isCurrent ? '\u2713' : (b.isRemote ? '\u2601' : '\u238B')}</span>

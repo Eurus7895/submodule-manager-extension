@@ -20,8 +20,11 @@ export class BranchService {
     try {
       // Use simple git branch -a command (most compatible) with 5s timeout
       const output = await this.gitCmd.execGit(['branch', '-a'], fullPath, 5000);
-      const seenNames = new Set<string>();
+      const localNames = new Set<string>();
+      const remoteNames = new Set<string>();
+      let currentBranchName = '';
 
+      // First pass: categorize all branches into local and remote sets
       for (const line of output.split('\n')) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.includes('HEAD')) {
@@ -30,24 +33,39 @@ export class BranchService {
 
         const isCurrent = trimmed.startsWith('*');
         const branchName = trimmed.replace(/^\*\s*/, '').trim();
-
-        // Check if remote branch
         const isRemote = branchName.startsWith('remotes/origin/') || branchName.startsWith('origin/');
         const cleanName = branchName
           .replace(/^remotes\/origin\//, '')
           .replace(/^origin\//, '');
 
-        // Skip duplicates (prefer local over remote)
-        if (seenNames.has(cleanName)) {
-          continue;
+        if (isCurrent && !isRemote) {
+          currentBranchName = cleanName;
         }
-        seenNames.add(cleanName);
+
+        if (isRemote) {
+          remoteNames.add(cleanName);
+        } else {
+          localNames.add(cleanName);
+        }
+      }
+
+      // Second pass: build unique branch list with local/remote tracking
+      const allNames = new Set([...localNames, ...remoteNames]);
+      for (const name of allNames) {
+        const hasLocalCopy = localNames.has(name);
+        const hasRemoteCopy = remoteNames.has(name);
+        // Prefer local over remote for dedup
+        const isRemote = hasRemoteCopy && !hasLocalCopy;
 
         branches.push({
-          name: cleanName,
+          name,
           isRemote,
-          isCurrent: isCurrent && !isRemote,
-          commit: ''
+          isCurrent: name === currentBranchName,
+          commit: '',
+          // For remote-only branches: mark if they also have a local checkout
+          hasLocal: isRemote && hasLocalCopy ? true : undefined,
+          // For local branches: mark if they also exist on remote (checked out from remote)
+          hasRemote: !isRemote && hasRemoteCopy ? true : undefined
         });
       }
 
