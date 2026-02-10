@@ -253,12 +253,15 @@
       const panel = document.getElementById(panelId);
       if (!panel) return;
 
+      const card = panel.closest('.submodule-card');
       if (panel.style.display === 'none') {
         panel.style.display = 'block';
         panel.innerHTML = '<div class="branches-loading">Loading branches...</div>';
+        if (card) card.classList.add('branches-open');
         postMessage('getBranches', { submodule });
       } else {
         panel.style.display = 'none';
+        if (card) card.classList.remove('branches-open');
       }
     },
 
@@ -266,6 +269,29 @@
       const submodule = el.dataset.submodule;
       const branch = el.dataset.branch;
       if (submodule && branch) {
+        // Optimistic UI: immediately highlight the selected branch
+        const panelId = 'branches-' + submodule.replace(/[\\/.]/g, '-');
+        const panel = document.getElementById(panelId);
+        if (panel) {
+          panel.querySelectorAll('.branch-item').forEach(function (item) {
+            const itemBranch = item.getAttribute('data-branch');
+            if (itemBranch === branch) {
+              item.classList.add('current');
+              var icon = item.querySelector('.branch-icon');
+              if (icon) icon.textContent = '\u2713';
+              var tagsEl = item.querySelector('.branch-tags');
+              if (tagsEl) tagsEl.innerHTML = '<span class="branch-tag tag-current">current</span>';
+              var del = item.querySelector('.branch-delete');
+              if (del) del.remove();
+            } else {
+              item.classList.remove('current');
+              var icon2 = item.querySelector('.branch-icon');
+              if (icon2 && icon2.textContent === '\u2713') {
+                icon2.textContent = item.classList.contains('remote') ? '\u2601' : '\u238B';
+              }
+            }
+          });
+        }
         postMessage('checkoutBranch', { submodule, branch });
       }
     },
@@ -280,6 +306,21 @@
       postMessage('deleteBranch', { submodule, branch, deleteRemote });
     }
   };
+
+  // Ripple effect for buttons
+  document.body.addEventListener('mousedown', function (e) {
+    const btn = e.target.closest('.btn');
+    if (!btn) return;
+    const ripple = document.createElement('span');
+    ripple.className = 'btn-ripple';
+    const rect = btn.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 2;
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+    ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+    btn.appendChild(ripple);
+    ripple.addEventListener('animationend', function () { ripple.remove(); });
+  });
 
   // Event delegation - handle all clicks
   document.body.addEventListener('click', function (e) {
@@ -317,7 +358,29 @@
       }
       el = el.parentElement;
     }
+
+    // If no action was found, check if the click was on a submodule row to toggle branches
+    const row = e.target.closest('.submodule-row');
+    if (row) {
+      const card = row.closest('.submodule-card');
+      if (card && card.dataset.path) {
+        // Don't toggle if clicked on a button, input, or link
+        if (e.target.closest('.row-actions') || e.target.closest('.row-checkbox')) return;
+        actions.toggleBranches({ dataset: { submodule: card.dataset.path } });
+      }
+    }
   });
+
+  // Handle workspace folder switching
+  const workspaceFolderSelect = document.getElementById('workspaceFolderSelect');
+  if (workspaceFolderSelect) {
+    workspaceFolderSelect.addEventListener('change', function (e) {
+      const folderPath = e.target.value;
+      if (folderPath) {
+        postMessage('switchWorkspaceFolder', { folderPath });
+      }
+    });
+  }
 
   // Handle search input
   const searchInput = document.getElementById('searchInput');
@@ -397,22 +460,56 @@
               if (branches.length === 0) {
                 panel.innerHTML = '<div class="branches-loading">No branches found</div>';
               } else {
-                panel.innerHTML = '<div class="branches-list">' + branches.map(b => {
-                  let tagHtml = '';
+                const filterId = 'branch-filter-' + branchSubmodule.replace(/[\\/.]/g, '-');
+                const listId = 'branch-list-' + branchSubmodule.replace(/[\\/.]/g, '-');
+                const countId = 'branch-count-' + branchSubmodule.replace(/[\\/.]/g, '-');
+                panel.innerHTML =
+                  '<div class="branches-filter">' +
+                    '<input type="text" class="branches-filter-input" id="' + filterId + '" placeholder="Filter branches..." />' +
+                    '<span class="branches-filter-count" id="' + countId + '">' + branches.length + ' branches</span>' +
+                  '</div>' +
+                  '<div class="branches-list" id="' + listId + '">' + branches.map(b => {
+                  let tags = '';
                   if (b.isCurrent) {
-                    tagHtml = '<span class="branch-tag tag-current">current</span>';
+                    tags = '<span class="branch-tag tag-current">current</span>';
                   } else if (b.isRemote) {
-                    tagHtml = '<span class="branch-tag tag-remote">remote</span>';
+                    tags = '<span class="branch-tag tag-remote">remote</span>';
+                    if (b.hasLocal) {
+                      tags += '<span class="branch-tag tag-local">local</span>';
+                    }
                   } else {
-                    tagHtml = '<span class="branch-tag tag-local">local</span>';
+                    tags = '<span class="branch-tag tag-local">local</span>';
+                    if (b.hasRemote) {
+                      tags += '<span class="branch-tag tag-remote">remote</span>';
+                    }
                   }
-                  return `<span class="branch-item ${b.isCurrent ? 'current' : ''} ${b.isRemote ? 'remote' : ''}">
+                  return `<div class="branch-item ${b.isCurrent ? 'current' : ''}" data-branch-name="${b.name.toLowerCase()}" data-submodule="${branchSubmodule}" data-branch="${b.name}">
                     <span class="branch-icon" data-action="checkoutBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Checkout ${b.name}">${b.isCurrent ? '\u2713' : (b.isRemote ? '\u2601' : '\u238B')}</span>
                     <span class="branch-name" data-action="checkoutBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Checkout ${b.name}">${b.name}</span>
-                    ${tagHtml}
+                    <span class="branch-tags">${tags}</span>
                     ${!b.isCurrent ? `<span class="branch-delete" data-action="deleteBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Delete ${b.name}">\u2715</span>` : ''}
-                  </span>`;
+                  </div>`;
                 }).join('') + '</div>';
+
+                // Attach filter event
+                const filterInput = document.getElementById(filterId);
+                const branchListEl = document.getElementById(listId);
+                const countEl = document.getElementById(countId);
+                if (filterInput && branchListEl) {
+                  filterInput.addEventListener('input', function () {
+                    const query = filterInput.value.toLowerCase();
+                    let visibleCount = 0;
+                    branchListEl.querySelectorAll('.branch-item').forEach(function (item) {
+                      const name = item.getAttribute('data-branch-name') || '';
+                      const visible = name.includes(query);
+                      item.style.display = visible ? 'flex' : 'none';
+                      if (visible) visibleCount++;
+                    });
+                    if (countEl) {
+                      countEl.textContent = visibleCount + ' of ' + branches.length + ' branches';
+                    }
+                  });
+                }
               }
             }
           }
