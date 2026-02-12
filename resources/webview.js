@@ -390,8 +390,10 @@
       document.querySelectorAll('.submodule-card').forEach(function (row) {
         const name = (row.dataset.name || '').toLowerCase();
         const path = (row.dataset.path || '').toLowerCase();
-        const visible = name.includes(query) || path.includes(query);
-        row.style.display = visible ? 'flex' : 'none';
+        const branchEl = row.querySelector('.branch');
+        const branch = branchEl ? (branchEl.textContent || '').toLowerCase() : '';
+        const visible = name.includes(query) || path.includes(query) || branch.includes(query);
+        row.style.display = visible ? 'block' : 'none';
       });
     });
   }
