@@ -447,12 +447,9 @@ h1::before {
   font-size: 12px;
   font-family: var(--vscode-editor-font-family);
   color: var(--text-secondary);
-<<<<<<< HEAD
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-=======
->>>>>>> 8c649eb (Fix submodule webview filter and layout issues)
 }
 
 .row-status {
@@ -464,11 +461,8 @@ h1::before {
   font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
-<<<<<<< HEAD
   white-space: nowrap;
   justify-self: start;
-=======
->>>>>>> 8c649eb (Fix submodule webview filter and layout issues)
 }
 
 .row-sync {
@@ -476,10 +470,7 @@ h1::before {
   align-items: center;
   gap: 8px;
   font-size: 11px;
-<<<<<<< HEAD
   white-space: nowrap;
-=======
->>>>>>> 8c649eb (Fix submodule webview filter and layout issues)
 }
 
 .row-sync .ahead { color: var(--success); }
