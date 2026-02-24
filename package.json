@@ -2,7 +2,7 @@
   "name": "submodule-manager",
   "displayName": "Submodule Manager",
   "description": "A modern VS Code extension for managing Git submodules - create branches, sync versions, and manage PRs across multiple submodules",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "submodule-manager",
   "engines": {
     "vscode": "^1.74.0"

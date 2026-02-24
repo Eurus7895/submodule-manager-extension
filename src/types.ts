@@ -14,6 +14,7 @@ export interface SubmoduleInfo {
   ahead: number;
   behind: number;
   lastUpdated?: Date;
+  isParentRepo?: boolean;
 }
 
 export type SubmoduleStatus =
@@ -31,6 +32,8 @@ export interface BranchInfo {
   commit: string;
   lastCommitDate?: Date;
   lastCommitMessage?: string;
+  hasLocal?: boolean;
+  hasRemote?: boolean;
 }
 
 export interface GitStatus {

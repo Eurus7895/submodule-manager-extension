@@ -49,6 +49,13 @@ export class GitOperations {
   // ==================== Submodule Methods ====================
 
   /**
+   * Get information about the parent (main) repository
+   */
+  async getParentRepoInfo(): Promise<SubmoduleInfo | null> {
+    return this.submoduleService.getParentRepoInfo();
+  }
+
+  /**
    * Get list of all submodules
    */
   async getSubmodules(): Promise<SubmoduleInfo[]> {

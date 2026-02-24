@@ -3,17 +3,18 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { GitOperations } from './gitOperations';
 import { PRManager } from './prManager';
-import { getHtmlForWebview, WebviewResourceUris } from './webview/template';
+import { getHtmlForWebview, WebviewResourceUris, WorkspaceFolderInfo } from './webview/template';
 import { messageHandlers, MessageHandlerContext } from './handlers/webviewMessageHandler';
 
 export class SubmoduleManagerPanel {
   public static currentPanel: SubmoduleManagerPanel | undefined;
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
-  private readonly _gitOps: GitOperations;
-  private readonly _prManager: PRManager;
+  private _gitOps: GitOperations;
+  private _prManager: PRManager;
   private _disposables: vscode.Disposable[] = [];
   private _workspaceRoot: string;
 
@@ -70,6 +71,35 @@ export class SubmoduleManagerPanel {
     );
   }
 
+  /**
+   * Get all workspace folders info for the folder selector
+   */
+  private _getWorkspaceFolders(): WorkspaceFolderInfo[] {
+    const folders = vscode.workspace.workspaceFolders || [];
+    return folders.map(folder => ({
+      name: folder.name,
+      path: folder.uri.fsPath,
+      isCurrent: folder.uri.fsPath === this._workspaceRoot
+    }));
+  }
+
+  /**
+   * Switch to a different workspace folder
+   */
+  private async _switchWorkspaceFolder(folderPath: string): Promise<void> {
+    const folders = vscode.workspace.workspaceFolders || [];
+    const targetFolder = folders.find(f => f.uri.fsPath === folderPath);
+    if (!targetFolder) {
+      vscode.window.showErrorMessage(`Workspace folder not found: ${path.basename(folderPath)}`);
+      return;
+    }
+
+    this._workspaceRoot = folderPath;
+    this._gitOps = new GitOperations(folderPath);
+    this._prManager = new PRManager(folderPath);
+    await this.refresh();
+  }
+
   public async refresh(fullRefresh: boolean = false) {
     await this._update(fullRefresh);
   }
@@ -87,14 +117,19 @@ export class SubmoduleManagerPanel {
   private async _update(fullRefresh: boolean = true) {
     const submodules = await this._gitOps.getSubmodules();
 
+    // Get parent repo info and prepend it to the list
+    const parentRepo = await this._gitOps.getParentRepoInfo();
+    const allRepos = parentRepo ? [parentRepo, ...submodules] : submodules;
+
     if (fullRefresh) {
       const resourceUris = this._getResourceUris();
-      this._panel.webview.html = getHtmlForWebview(submodules, resourceUris);
+      const workspaceFolders = this._getWorkspaceFolders();
+      this._panel.webview.html = getHtmlForWebview(allRepos, resourceUris, workspaceFolders);
     } else {
       // Send data update instead of regenerating HTML
       this._panel.webview.postMessage({
         type: 'updateSubmodules',
-        payload: { submodules }
+        payload: { submodules: allRepos }
       });
     }
   }
@@ -117,6 +152,15 @@ export class SubmoduleManagerPanel {
       // Handle refresh separately as it's not in the handler map
       if (message.type === 'refresh') {
         await this.refresh();
+        return;
+      }
+
+      // Handle workspace folder switch
+      if (message.type === 'switchWorkspaceFolder') {
+        const payload = message.payload as { folderPath: string };
+        if (payload && payload.folderPath) {
+          await this._switchWorkspaceFolder(payload.folderPath);
+        }
         return;
       }
 

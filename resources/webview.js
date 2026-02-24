@@ -86,7 +86,20 @@
       document.getElementById('productName').value = '';
       document.getElementById('releaseVersion').value = '';
       document.getElementById('devBranchName').value = '';
-      document.getElementById('baseBranch').innerHTML = '<option value="">Loading branches...</option>';
+      document.getElementById('baseBranch').value = '';
+      const baseBranchInput = document.getElementById('baseBranchInput');
+      if (baseBranchInput) {
+        baseBranchInput.value = '';
+        baseBranchInput.placeholder = 'Loading branches...';
+      }
+      const baseBranchList = document.getElementById('baseBranchList');
+      if (baseBranchList) {
+        baseBranchList.innerHTML = '';
+      }
+      const baseBranchDropdown = document.getElementById('baseBranchDropdown');
+      if (baseBranchDropdown) {
+        baseBranchDropdown.classList.remove('open');
+      }
       // Request branches from first submodule (or main repo)
       postMessage('getBaseBranchesForCreate', {});
       document.getElementById('createBranchModal').classList.add('active');
@@ -134,7 +147,20 @@
       document.getElementById('productName').value = '';
       document.getElementById('releaseVersion').value = '';
       document.getElementById('devBranchName').value = '';
-      document.getElementById('baseBranch').innerHTML = '<option value="">Loading branches...</option>';
+      document.getElementById('baseBranch').value = '';
+      const baseBranchInput = document.getElementById('baseBranchInput');
+      if (baseBranchInput) {
+        baseBranchInput.value = '';
+        baseBranchInput.placeholder = 'Loading branches...';
+      }
+      const baseBranchList = document.getElementById('baseBranchList');
+      if (baseBranchList) {
+        baseBranchList.innerHTML = '';
+      }
+      const baseBranchDropdown = document.getElementById('baseBranchDropdown');
+      if (baseBranchDropdown) {
+        baseBranchDropdown.classList.remove('open');
+      }
       // Request branches
       postMessage('getBaseBranchesForCreate', {});
       // Set selected submodules
@@ -227,12 +253,15 @@
       const panel = document.getElementById(panelId);
       if (!panel) return;
 
+      const card = panel.closest('.submodule-card');
       if (panel.style.display === 'none') {
         panel.style.display = 'block';
         panel.innerHTML = '<div class="branches-loading">Loading branches...</div>';
+        if (card) card.classList.add('branches-open');
         postMessage('getBranches', { submodule });
       } else {
         panel.style.display = 'none';
+        if (card) card.classList.remove('branches-open');
       }
     },
 
@@ -240,6 +269,27 @@
       const submodule = el.dataset.submodule;
       const branch = el.dataset.branch;
       if (submodule && branch) {
+        // Optimistic UI: immediately highlight the selected branch
+        const panelId = 'branches-' + submodule.replace(/[\\/.]/g, '-');
+        const panel = document.getElementById(panelId);
+        if (panel) {
+          panel.querySelectorAll('.branch-item').forEach(function (item) {
+            const itemBranch = item.getAttribute('data-branch');
+            if (itemBranch === branch) {
+              item.classList.add('current');
+              var icon = item.querySelector('.branch-icon');
+              if (icon) icon.textContent = '\u2713';
+              var del = item.querySelector('.branch-delete');
+              if (del) del.remove();
+            } else {
+              item.classList.remove('current');
+              var icon2 = item.querySelector('.branch-icon');
+              if (icon2 && icon2.textContent === '\u2713') {
+                icon2.textContent = item.classList.contains('remote') ? '\u2601' : '\u238B';
+              }
+            }
+          });
+        }
         postMessage('checkoutBranch', { submodule, branch });
       }
     },
@@ -254,6 +304,21 @@
       postMessage('deleteBranch', { submodule, branch, deleteRemote });
     }
   };
+
+  // Ripple effect for buttons
+  document.body.addEventListener('mousedown', function (e) {
+    const btn = e.target.closest('.btn');
+    if (!btn) return;
+    const ripple = document.createElement('span');
+    ripple.className = 'btn-ripple';
+    const rect = btn.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 2;
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+    ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+    btn.appendChild(ripple);
+    ripple.addEventListener('animationend', function () { ripple.remove(); });
+  });
 
   // Event delegation - handle all clicks
   document.body.addEventListener('click', function (e) {
@@ -291,7 +356,29 @@
       }
       el = el.parentElement;
     }
+
+    // If no action was found, check if the click was on a submodule row to toggle branches
+    const row = e.target.closest('.submodule-row');
+    if (row) {
+      const card = row.closest('.submodule-card');
+      if (card && card.dataset.path) {
+        // Don't toggle if clicked on a button, input, or link
+        if (e.target.closest('.row-actions') || e.target.closest('.row-checkbox')) return;
+        actions.toggleBranches({ dataset: { submodule: card.dataset.path } });
+      }
+    }
   });
+
+  // Handle workspace folder switching
+  const workspaceFolderSelect = document.getElementById('workspaceFolderSelect');
+  if (workspaceFolderSelect) {
+    workspaceFolderSelect.addEventListener('change', function (e) {
+      const folderPath = e.target.value;
+      if (folderPath) {
+        postMessage('switchWorkspaceFolder', { folderPath });
+      }
+    });
+  }
 
   // Handle search input
   const searchInput = document.getElementById('searchInput');
@@ -301,8 +388,10 @@
       document.querySelectorAll('.submodule-card').forEach(function (row) {
         const name = (row.dataset.name || '').toLowerCase();
         const path = (row.dataset.path || '').toLowerCase();
-        const visible = name.includes(query) || path.includes(query);
-        row.style.display = visible ? 'flex' : 'none';
+        const branchEl = row.querySelector('.branch');
+        const branch = branchEl ? (branchEl.textContent || '').toLowerCase() : '';
+        const visible = name.includes(query) || path.includes(query) || branch.includes(query);
+        row.style.display = visible ? 'block' : 'none';
       });
     });
   }
@@ -371,13 +460,54 @@
               if (branches.length === 0) {
                 panel.innerHTML = '<div class="branches-loading">No branches found</div>';
               } else {
-                panel.innerHTML = '<div class="branches-list">' + branches.map(b =>
-                  `<span class="branch-item ${b.isCurrent ? 'current' : ''} ${b.isRemote ? 'remote' : ''}">
+                const filterId = 'branch-filter-' + branchSubmodule.replace(/[\\/.]/g, '-');
+                const listId = 'branch-list-' + branchSubmodule.replace(/[\\/.]/g, '-');
+                const countId = 'branch-count-' + branchSubmodule.replace(/[\\/.]/g, '-');
+                panel.innerHTML =
+                  '<div class="branches-filter">' +
+                    '<input type="text" class="branches-filter-input" id="' + filterId + '" placeholder="Filter branches..." />' +
+                    '<span class="branches-filter-count" id="' + countId + '">' + branches.length + ' branches</span>' +
+                  '</div>' +
+                  '<div class="branches-list" id="' + listId + '">' + branches.map(b => {
+                  let tags = '';
+                  if (b.isRemote) {
+                    tags = '<span class="branch-tag tag-remote">remote</span>';
+                    if (b.hasLocal) {
+                      tags += '<span class="branch-tag tag-local">local</span>';
+                    }
+                  } else {
+                    tags = '<span class="branch-tag tag-local">local</span>';
+                    if (b.hasRemote) {
+                      tags += '<span class="branch-tag tag-remote">remote</span>';
+                    }
+                  }
+                  return `<div class="branch-item ${b.isCurrent ? 'current' : ''}" data-branch-name="${b.name.toLowerCase()}" data-submodule="${branchSubmodule}" data-branch="${b.name}">
                     <span class="branch-icon" data-action="checkoutBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Checkout ${b.name}">${b.isCurrent ? '\u2713' : (b.isRemote ? '\u2601' : '\u238B')}</span>
-                    <span data-action="checkoutBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Checkout ${b.name}">${b.name}${b.isRemote ? ' (remote)' : ''}</span>
+                    <span class="branch-name" data-action="checkoutBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Checkout ${b.name}">${b.name}</span>
+                    <span class="branch-tags">${tags}</span>
                     ${!b.isCurrent ? `<span class="branch-delete" data-action="deleteBranchInline" data-submodule="${branchSubmodule}" data-branch="${b.name}" title="Delete ${b.name}">\u2715</span>` : ''}
-                  </span>`
-                ).join('') + '</div>';
+                  </div>`;
+                }).join('') + '</div>';
+
+                // Attach filter event
+                const filterInput = document.getElementById(filterId);
+                const branchListEl = document.getElementById(listId);
+                const countEl = document.getElementById(countId);
+                if (filterInput && branchListEl) {
+                  filterInput.addEventListener('input', function () {
+                    const query = filterInput.value.toLowerCase();
+                    let visibleCount = 0;
+                    branchListEl.querySelectorAll('.branch-item').forEach(function (item) {
+                      const name = item.getAttribute('data-branch-name') || '';
+                      const visible = name.includes(query);
+                      item.style.display = visible ? 'flex' : 'none';
+                      if (visible) visibleCount++;
+                    });
+                    if (countEl) {
+                      countEl.textContent = visibleCount + ' of ' + branches.length + ' branches';
+                    }
+                  });
+                }
               }
             }
           }
@@ -444,16 +574,36 @@
         }
 
         case 'baseBranchesForCreate': {
-          const baseBranchSelect = document.getElementById('baseBranch');
+          const baseBranchHidden = document.getElementById('baseBranch');
+          const baseBranchInput = document.getElementById('baseBranchInput');
+          const baseBranchList = document.getElementById('baseBranchList');
           const availableBranches = (message.payload && message.payload.branches) || [];
-          if (baseBranchSelect) {
+
+          if (baseBranchList && baseBranchInput && baseBranchHidden) {
             if (availableBranches.length === 0) {
-              baseBranchSelect.innerHTML = '<option value="main">main</option>';
+              baseBranchList.innerHTML = '<div class="branch-dropdown-item" data-value="main"><span class="branch-name">main</span></div>';
+              baseBranchInput.value = 'main';
+              baseBranchHidden.value = 'main';
             } else {
-              baseBranchSelect.innerHTML = availableBranches.map(b =>
-                `<option value="${b.name}">${b.name}${b.isCurrent ? ' (current)' : ''}${b.isRemote ? ' (remote)' : ''}</option>`
-              ).join('');
+              baseBranchList.innerHTML = availableBranches.map(b => {
+                let tags = '';
+                if (b.isRemote) {
+                  tags += '<span class="branch-tag tag-remote">remote</span>';
+                } else {
+                  tags += '<span class="branch-tag tag-local">local</span>';
+                }
+                return `<div class="branch-dropdown-item" data-value="${b.name}">
+                  <span class="branch-name">${b.name}</span>
+                  <span class="branch-tags">${tags}</span>
+                </div>`;
+              }).join('');
+
+              // Set default value to first branch
+              const firstBranch = availableBranches[0];
+              baseBranchInput.value = firstBranch.name;
+              baseBranchHidden.value = firstBranch.name;
             }
+            baseBranchInput.placeholder = 'Select base branch...';
             updatePrefixOptions();
           }
           break;
@@ -536,7 +686,8 @@
   }
 
   function updatePrefixOptions() {
-    const baseBranch = document.getElementById('baseBranch').value.trim() || 'main';
+    const baseBranchEl = document.getElementById('baseBranch');
+    const baseBranch = (baseBranchEl ? baseBranchEl.value.trim() : '') || 'main';
     const branchType = getBaseBranchType(baseBranch);
     const rules = branchHierarchy[branchType] || branchHierarchy['main'];
 
@@ -672,11 +823,11 @@
     if (retriesLeft <= 0) return;
     branchRetryTimer = setTimeout(function () {
       branchRetryTimer = null;
-      const baseBranchSelect = document.getElementById('baseBranch');
-      if (!baseBranchSelect) return;
+      const baseBranchList = document.getElementById('baseBranchList');
+      if (!baseBranchList) return;
       // Check if still showing loading text (branches not received yet)
-      const firstOption = baseBranchSelect.querySelector('option');
-      if (firstOption && firstOption.textContent.includes('Loading')) {
+      const loadingEl = baseBranchList.querySelector('.branch-select-loading');
+      if (loadingEl) {
         console.log('[SubmoduleManager] Retrying base branch load, retries left:', retriesLeft - 1);
         postMessage('getBaseBranchesForCreate', {});
         retryLoadBaseBranches(retriesLeft - 1);
@@ -685,7 +836,6 @@
   }
 
   // Event listeners for branch naming inputs
-  document.getElementById('baseBranch').addEventListener('change', updatePrefixOptions);
   document.getElementById('branchPrefix').addEventListener('change', toggleBranchFormFields);
   document.getElementById('ticketId').addEventListener('input', updateBranchPreview);
   document.getElementById('taskTitle').addEventListener('input', updateBranchPreview);
@@ -693,7 +843,48 @@
   document.getElementById('releaseVersion').addEventListener('input', updateBranchPreview);
   document.getElementById('devBranchName').addEventListener('input', updateBranchPreview);
 
+  // Custom branch dropdown event handlers
+  const baseBranchDropdown = document.getElementById('baseBranchDropdown');
+  const baseBranchInput = document.getElementById('baseBranchInput');
+  const baseBranchList = document.getElementById('baseBranchList');
+  const baseBranchHidden = document.getElementById('baseBranch');
+
+  if (baseBranchInput && baseBranchDropdown) {
+    // Toggle dropdown on input click
+    baseBranchInput.addEventListener('click', function(e) {
+      e.stopPropagation();
+      baseBranchDropdown.classList.toggle('open');
+    });
+
+    // Handle branch selection
+    baseBranchList.addEventListener('click', function(e) {
+      const item = e.target.closest('.branch-dropdown-item');
+      if (item) {
+        const value = item.dataset.value;
+        baseBranchInput.value = value;
+        baseBranchHidden.value = value;
+        baseBranchDropdown.classList.remove('open');
+        updatePrefixOptions();
+      }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!baseBranchDropdown.contains(e.target)) {
+        baseBranchDropdown.classList.remove('open');
+      }
+    });
+  }
+
+  // Ensure all branch panels are closed on load
+  function closeAllBranchPanels() {
+    document.querySelectorAll('.branches-panel').forEach(panel => {
+      panel.style.display = 'none';
+    });
+  }
+
   // Initialize UI on load
   updateSelectionUI();
   updateRebaseUI();
+  closeAllBranchPanels();
 })();

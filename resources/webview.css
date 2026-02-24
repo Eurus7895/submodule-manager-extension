@@ -81,10 +81,37 @@ h1::before {
   transition: all 0.2s ease;
   background: var(--bg-tertiary);
   color: var(--text-primary);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
 }
 
 .btn:hover {
   background: var(--border);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
+  transition: all 0.08s ease;
+}
+
+.btn .btn-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(0);
+  animation: ripple-effect 0.5s ease-out;
+  pointer-events: none;
+}
+
+@keyframes ripple-effect {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
 }
 
 .btn-primary {
@@ -94,6 +121,15 @@ h1::before {
 
 .btn-primary:hover {
   background: var(--accent-hover);
+  box-shadow: 0 2px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-primary:active {
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.2);
+}
+
+.btn-primary .btn-ripple {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .btn-sm {
@@ -206,10 +242,17 @@ h1::before {
 }
 
 .submodule-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 24px 1.5fr 1fr 1fr 80px auto 80px auto auto;
+  grid-template-rows: auto;
   align-items: center;
   padding: 12px 16px;
-  gap: 16px;
+  gap: 0 12px;
+  cursor: pointer;
+}
+
+.submodule-card.branches-open > .submodule-row {
+  background: rgba(0, 123, 255, 0.04);
 }
 
 .branches-panel {
@@ -217,6 +260,34 @@ h1::before {
   padding: 12px 16px;
   background: var(--bg-tertiary);
   border-radius: 0 0 6px 6px;
+}
+
+.branches-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.branches-filter-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.branches-filter-input:focus {
+  border-color: var(--accent);
+}
+
+.branches-filter-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .branches-loading {
@@ -227,21 +298,81 @@ h1::before {
 
 .branches-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.branches-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.branches-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.branches-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.branches-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .branch-item {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 8px;
+  padding: 6px 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.15s ease;
+  width: 100%;
+  min-height: 32px;
+}
+
+.branch-item .branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.branch-item .branch-tags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.branch-item .branch-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
+.branch-item .branch-tag.tag-current {
+  background: rgba(40, 167, 69, 0.2);
+  color: var(--success);
+}
+
+.branch-item .branch-tag.tag-remote {
+  background: rgba(0, 123, 255, 0.2);
+  color: var(--info);
+}
+
+.branch-item .branch-tag.tag-local {
+  background: rgba(108, 117, 125, 0.2);
+  color: var(--text-secondary);
 }
 
 .branch-item:hover {
@@ -251,17 +382,10 @@ h1::before {
 
 .branch-item.current {
   border-color: var(--success);
-  background: rgba(40, 167, 69, 0.1);
-}
-
-.branch-item.remote {
-  border-color: var(--info);
-  background: rgba(0, 123, 255, 0.05);
-  font-style: italic;
-}
-
-.branch-item.remote:hover {
-  background: rgba(0, 123, 255, 0.1);
+  background: rgba(40, 167, 69, 0.12);
+  border-left: 3px solid var(--success);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(40, 167, 69, 0.15);
 }
 
 .branch-item .branch-icon {
@@ -271,11 +395,12 @@ h1::before {
 .branch-item .branch-delete {
   font-size: 10px;
   color: var(--text-muted);
-  margin-left: 4px;
-  padding: 2px 4px;
+  margin-left: auto;
+  padding: 2px 6px;
   border-radius: 3px;
   opacity: 0;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .branch-item:hover .branch-delete {
@@ -292,14 +417,11 @@ h1::before {
   height: 18px;
   cursor: pointer;
   accent-color: var(--accent);
-  flex-shrink: 0;
 }
 
 .row-name {
   font-weight: 600;
   font-size: 14px;
-  min-width: 150px;
-  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -308,8 +430,6 @@ h1::before {
 .row-path {
   font-size: 12px;
   color: var(--text-secondary);
-  min-width: 120px;
-  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -318,8 +438,6 @@ h1::before {
 
 .row-branch {
   font-size: 12px;
-  min-width: 100px;
-  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -329,11 +447,13 @@ h1::before {
   font-size: 12px;
   font-family: var(--vscode-editor-font-family);
   color: var(--text-secondary);
-  min-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .row-status {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
@@ -341,7 +461,8 @@ h1::before {
   font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
-  flex-shrink: 0;
+  white-space: nowrap;
+  justify-self: start;
 }
 
 .row-sync {
@@ -349,7 +470,7 @@ h1::before {
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  min-width: 100px;
+  white-space: nowrap;
 }
 
 .row-sync .ahead { color: var(--success); }
@@ -358,13 +479,26 @@ h1::before {
 .row-actions {
   display: flex;
   gap: 4px;
-  margin-left: auto;
-  flex-shrink: 0;
+  justify-self: end;
 }
 
 .row-actions .btn {
   padding: 4px 8px;
   font-size: 11px;
+  transition: all 0.15s ease;
+}
+
+.row-actions .btn:hover {
+  transform: translateY(-2px) scale(1.1);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+  background: var(--accent);
+  color: var(--vscode-button-foreground);
+}
+
+.row-actions .btn:active {
+  transform: translateY(0) scale(0.95);
+  box-shadow: none;
+  transition: all 0.06s ease;
 }
 
 .rebase-badge {
@@ -507,6 +641,77 @@ h1::before {
   cursor: pointer;
 }
 
+.branch-select-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  margin-top: 6px;
+}
+
+.branch-select-list .branch-select-loading {
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.branch-select-list .branch-select-empty {
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.branch-select-row {
+  display: flex;
+  align-items: center;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s ease;
+  gap: 8px;
+}
+
+.branch-select-row:last-child {
+  border-bottom: none;
+}
+
+.branch-select-row:hover {
+  background: var(--bg-secondary);
+}
+
+.branch-select-row.selected {
+  background: rgba(var(--vscode-button-background), 0.15);
+  background: var(--accent);
+  color: var(--vscode-button-foreground);
+}
+
+.branch-select-row .branch-select-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-select-row .branch-select-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.branch-select-row .branch-select-tag.current {
+  background: rgba(40, 167, 69, 0.15);
+  color: var(--success);
+}
+
+.branch-select-row .branch-select-tag.remote {
+  background: rgba(0, 123, 255, 0.1);
+  color: var(--info);
+}
+
 .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -597,4 +802,176 @@ h1::before {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* Custom branch dropdown styles */
+.branch-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.branch-dropdown-input {
+  width: 100%;
+  padding: 10px 12px;
+  padding-right: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.branch-dropdown-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.branch-dropdown-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.branch-dropdown-list {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  z-index: 100;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.branch-dropdown.open .branch-dropdown-list {
+  display: block;
+}
+
+.branch-dropdown.open .branch-dropdown-input {
+  border-radius: 6px 6px 0 0;
+  border-color: var(--accent);
+}
+
+.branch-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.1s ease;
+}
+
+.branch-dropdown-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.branch-dropdown-item.selected {
+  background: rgba(0, 123, 255, 0.1);
+}
+
+.branch-dropdown-item .branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.branch-dropdown-item .branch-tags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.branch-dropdown-item .branch-tag {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* Workspace folder selector */
+.workspace-folder-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.workspace-folder-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.workspace-folder-selector {
+  flex-shrink: 0;
+}
+
+.workspace-folder-select {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.workspace-folder-select:hover {
+  border-color: var(--accent);
+}
+
+.workspace-folder-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+}
+
+.workspace-folder-path {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--vscode-editor-font-family);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Parent repository card styling */
+.submodule-card.parent-repo {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.submodule-card.parent-repo .row-name {
+  color: var(--accent);
+}
+
+.parent-badge {
+  background: var(--accent);
+  color: var(--vscode-button-foreground);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  margin-left: 8px;
 }
