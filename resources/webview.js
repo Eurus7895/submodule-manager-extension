@@ -279,8 +279,6 @@
               item.classList.add('current');
               var icon = item.querySelector('.branch-icon');
               if (icon) icon.textContent = '\u2713';
-              var tagsEl = item.querySelector('.branch-tags');
-              if (tagsEl) tagsEl.innerHTML = '<span class="branch-tag tag-current">current</span>';
               var del = item.querySelector('.branch-delete');
               if (del) del.remove();
             } else {
@@ -390,8 +388,10 @@
       document.querySelectorAll('.submodule-card').forEach(function (row) {
         const name = (row.dataset.name || '').toLowerCase();
         const path = (row.dataset.path || '').toLowerCase();
-        const visible = name.includes(query) || path.includes(query);
-        row.style.display = visible ? 'flex' : 'none';
+        const branchEl = row.querySelector('.branch');
+        const branch = branchEl ? (branchEl.textContent || '').toLowerCase() : '';
+        const visible = name.includes(query) || path.includes(query) || branch.includes(query);
+        row.style.display = visible ? 'block' : 'none';
       });
     });
   }
@@ -470,9 +470,7 @@
                   '</div>' +
                   '<div class="branches-list" id="' + listId + '">' + branches.map(b => {
                   let tags = '';
-                  if (b.isCurrent) {
-                    tags = '<span class="branch-tag tag-current">current</span>';
-                  } else if (b.isRemote) {
+                  if (b.isRemote) {
                     tags = '<span class="branch-tag tag-remote">remote</span>';
                     if (b.hasLocal) {
                       tags += '<span class="branch-tag tag-local">local</span>';
@@ -589,13 +587,9 @@
             } else {
               baseBranchList.innerHTML = availableBranches.map(b => {
                 let tags = '';
-                if (b.isCurrent) {
-                  tags += '<span class="branch-tag tag-current">current</span>';
-                }
                 if (b.isRemote) {
                   tags += '<span class="branch-tag tag-remote">remote</span>';
-                }
-                if (!b.isCurrent && !b.isRemote) {
+                } else {
                   tags += '<span class="branch-tag tag-local">local</span>';
                 }
                 return `<div class="branch-dropdown-item" data-value="${b.name}">
