@@ -129,7 +129,7 @@
       const checkboxes = document.querySelectorAll('.branch-submodule:checked');
       const submodules = Array.from(checkboxes).map(cb => cb.value);
       if (submodules.length === 0) {
-        alert('Please select at least one submodule.');
+        alert('Please select at least one repository.');
         return;
       }
 
@@ -246,6 +246,7 @@
     openSubmodule: (el) => postMessage('openSubmodule', { submodule: el.dataset.submodule }),
     stageSubmodule: (el) => postMessage('stageSubmodule', { submodule: el.dataset.submodule }),
     syncSelected: () => postMessage('syncVersions', { submodules: Array.from(selectedSubmodules) }),
+    syncAll: () => postMessage('syncVersions', { submodules: [] }),
 
     toggleBranches: (el) => {
       const submodule = el.dataset.submodule;
@@ -279,6 +280,7 @@
               item.classList.add('current');
               var icon = item.querySelector('.branch-icon');
               if (icon) icon.textContent = '\u2713';
+              // Remove delete button from the now-current branch
               var del = item.querySelector('.branch-delete');
               if (del) del.remove();
             } else {
@@ -286,6 +288,17 @@
               var icon2 = item.querySelector('.branch-icon');
               if (icon2 && icon2.textContent === '\u2713') {
                 icon2.textContent = item.classList.contains('remote') ? '\u2601' : '\u238B';
+              }
+              // Restore delete button for branches that were previously current
+              if (!item.querySelector('.branch-delete')) {
+                var delBtn = document.createElement('span');
+                delBtn.className = 'branch-delete';
+                delBtn.setAttribute('data-action', 'deleteBranchInline');
+                delBtn.setAttribute('data-submodule', item.getAttribute('data-submodule') || submodule);
+                delBtn.setAttribute('data-branch', itemBranch || '');
+                delBtn.title = 'Delete ' + (itemBranch || '');
+                delBtn.textContent = '\u2715';
+                item.appendChild(delBtn);
               }
             }
           });
@@ -655,14 +668,17 @@
 
   // Branch naming tool functions
   // Branch hierarchy rules:
-  // - main -> bugfix/, release/, dev/
-  // - dev -> feature/
-  // - feature -> task/
+  // - main/master -> bugfix/, release/, dev/
+  // - dev -> feature/, release/
+  // - feature -> feature/, task/
+  // - task -> task/
+  // - unknown -> no type hint, all prefixes available
   const branchHierarchy = {
     'main': { prefixes: ['bugfix', 'release', 'dev'], hint: 'From main: Create bugfix, release, or dev branches' },
     'master': { prefixes: ['bugfix', 'release', 'dev'], hint: 'From master: Create bugfix, release, or dev branches' },
-    'dev': { prefixes: ['feature'], hint: 'From dev: Create feature branches' },
-    'feature': { prefixes: ['task'], hint: 'From feature: Create task branches' }
+    'dev': { prefixes: ['feature', 'release'], hint: 'From dev: Create feature or release branches' },
+    'feature': { prefixes: ['feature', 'task'], hint: 'From feature: Create feature or task branches' },
+    'task': { prefixes: ['task'], hint: 'From task: Create task branches' }
   };
 
   // Store created branch info for review
@@ -682,33 +698,43 @@
     if (lower === 'main' || lower === 'master') return 'main';
     if (lower === 'dev' || lower.startsWith('dev/') || lower.startsWith('dev-')) return 'dev';
     if (lower.startsWith('feature/') || lower.startsWith('feature-')) return 'feature';
-    return 'main';
+    if (lower === 'task' || lower.startsWith('task/') || lower.startsWith('task-')) return 'task';
+    return 'unknown';
   }
 
   function updatePrefixOptions() {
     const baseBranchEl = document.getElementById('baseBranch');
     const baseBranch = (baseBranchEl ? baseBranchEl.value.trim() : '') || 'main';
     const branchType = getBaseBranchType(baseBranch);
-    const rules = branchHierarchy[branchType] || branchHierarchy['main'];
+    const rules = branchHierarchy[branchType];
 
     const prefixSelect = document.getElementById('branchPrefix');
     const currentValue = prefixSelect.value;
 
+    let prefixes;
+    if (rules) {
+      prefixes = rules.prefixes;
+      // Update hints only for known branch types
+      document.getElementById('baseBranchHint').textContent = 'Type: ' + branchType;
+      document.getElementById('prefixRuleHint').textContent = rules.hint;
+    } else {
+      // Unknown branch type - don't show type hint, show all prefix options
+      prefixes = ['bugfix', 'feature', 'task', 'release', 'dev'];
+      document.getElementById('baseBranchHint').textContent = '';
+      document.getElementById('prefixRuleHint').textContent = '';
+    }
+
     // Update options based on rules
-    prefixSelect.innerHTML = rules.prefixes.map(p => {
+    prefixSelect.innerHTML = prefixes.map(p => {
       return `<option value="${p}">${p}/</option>`;
     }).join('');
 
     // Try to keep current selection if valid, otherwise use first option
-    if (rules.prefixes.includes(currentValue)) {
+    if (prefixes.includes(currentValue)) {
       prefixSelect.value = currentValue;
     } else {
-      prefixSelect.value = rules.prefixes[0];
+      prefixSelect.value = prefixes[0];
     }
-
-    // Update hints
-    document.getElementById('baseBranchHint').textContent = 'Type: ' + branchType;
-    document.getElementById('prefixRuleHint').textContent = rules.hint;
 
     toggleBranchFormFields();
   }
@@ -793,9 +819,9 @@
 
     let html = '<div style="margin-bottom: 12px;">';
     if (failCount === 0) {
-      html += `<span style="color: var(--success);">\u2713 Branch created successfully in ${successCount} submodule(s)</span>`;
+      html += `<span style="color: var(--success);">\u2713 Branch created successfully in ${successCount} repository/repositories</span>`;
     } else {
-      html += `<span style="color: var(--warning);">\u26A0 Created in ${successCount}, failed in ${failCount} submodule(s)</span>`;
+      html += `<span style="color: var(--warning);">\u26A0 Created in ${successCount}, failed in ${failCount} repository/repositories</span>`;
     }
     html += '</div>';
 

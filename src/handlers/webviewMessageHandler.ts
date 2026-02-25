@@ -96,11 +96,11 @@ export async function handleCreateBranch(
 
   if (failCount === 0) {
     vscode.window.showInformationMessage(
-      `Branch '${payload.branchName}' created in ${successCount} submodule(s)`
+      `Branch '${payload.branchName}' created in ${successCount} repository/repositories`
     );
   } else {
     vscode.window.showWarningMessage(
-      `Branch created in ${successCount} submodule(s), failed in ${failCount}`
+      `Branch created in ${successCount} repository/repositories, failed in ${failCount}`
     );
   }
 
@@ -280,7 +280,7 @@ export async function handleSyncVersions(
 
   if (errors.length === 0) {
     vscode.window.showInformationMessage(
-      `Successfully synced ${successCount} submodule(s) to recorded commits`
+      `Successfully synced ${successCount} repository/repositories to recorded commits`
     );
   } else {
     // Show detailed error message

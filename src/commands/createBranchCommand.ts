@@ -10,8 +10,9 @@ import { SubmoduleTreeProvider } from '../submoduleTreeProvider';
 // Branch hierarchy rules
 const branchHierarchy: Record<string, { prefixes: string[]; hint: string }> = {
   'main': { prefixes: ['bugfix', 'release', 'dev'], hint: 'From main: bugfix/, release/, dev/' },
-  'dev': { prefixes: ['feature'], hint: 'From dev: feature/' },
-  'feature': { prefixes: ['task'], hint: 'From feature: task/' }
+  'dev': { prefixes: ['feature', 'release'], hint: 'From dev: feature/, release/' },
+  'feature': { prefixes: ['feature', 'task'], hint: 'From feature: feature/, task/' },
+  'task': { prefixes: ['task'], hint: 'From task: task/' }
 };
 
 /**
@@ -22,7 +23,8 @@ function getBaseBranchType(branch: string): string {
   if (lower === 'main' || lower === 'master') return 'main';
   if (lower === 'dev' || lower.startsWith('dev/') || lower.startsWith('dev-')) return 'dev';
   if (lower.startsWith('feature/') || lower.startsWith('feature-')) return 'feature';
-  return 'main';
+  if (lower === 'task' || lower.startsWith('task/') || lower.startsWith('task-')) return 'task';
+  return 'unknown';
 }
 
 /**
@@ -54,12 +56,18 @@ export function registerCreateBranchCommand(
         submodules = await gitOps.getSubmodules();
       }
 
+      // Include parent/main repo so Quick Actions can interact with it too
+      const parentRepo = await gitOps.getParentRepoInfo();
+      if (parentRepo) {
+        submodules = [parentRepo, ...submodules];
+      }
+
       if (submodules.length === 0) {
-        vscode.window.showWarningMessage('No submodules found. Make sure this repository has submodules configured.');
+        vscode.window.showWarningMessage('No repositories found. Make sure this repository has submodules configured.');
         return;
       }
 
-      // Step 1: Select submodules FIRST
+      // Step 1: Select repositories FIRST
       const items = submodules.map(s => ({
         label: s.name,
         description: s.path,
@@ -68,7 +76,7 @@ export function registerCreateBranchCommand(
 
       const selected = await vscode.window.showQuickPick(items, {
         canPickMany: true,
-        placeHolder: 'Select submodules to create branch in',
+        placeHolder: 'Select repositories to create branch in',
         title: 'Step 1: Select Repositories'
       });
 
@@ -102,7 +110,7 @@ export function registerCreateBranchCommand(
 
       // Step 3: Determine allowed prefixes based on base branch
       const branchType = getBaseBranchType(baseBranch);
-      const rules = branchHierarchy[branchType] || branchHierarchy['main'];
+      const rules = branchHierarchy[branchType] || { prefixes: ['bugfix', 'feature', 'task', 'release', 'dev'], hint: 'Select branch prefix' };
 
       const prefixItems = rules.prefixes.map(p => ({
         label: `${p}/`,
@@ -201,8 +209,8 @@ export function registerCreateBranchCommand(
       // Show result and ask to push
       if (successCount > 0) {
         const message = failCount === 0
-          ? `Branch '${branchName}' created in ${successCount} submodule(s)`
-          : `Branch created in ${successCount}, failed in ${failCount} submodule(s)`;
+          ? `Branch '${branchName}' created in ${successCount} repository/repositories`
+          : `Branch created in ${successCount}, failed in ${failCount} repository/repositories`;
 
         const pushChoice = await vscode.window.showInformationMessage(
           message,
@@ -230,7 +238,7 @@ export function registerCreateBranchCommand(
           );
         }
       } else {
-        vscode.window.showErrorMessage('Failed to create branch in all submodules');
+        vscode.window.showErrorMessage('Failed to create branch in all repositories');
       }
 
       submoduleTreeProvider.refresh();

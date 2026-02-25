@@ -364,13 +364,13 @@ export function getHtmlForWebview(submodules: SubmoduleInfo[], resourceUris: Web
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${resourceUris.styleUri.scheme}:; script-src 'nonce-${nonce}';">
-  <title>Submodule Manager</title>
+  <title>Repository Manager</title>
   <link rel="stylesheet" href="${resourceUris.styleUri}">
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>Submodule Manager</h1>
+      <h1>Repository Manager</h1>
       <div class="header-actions">
         <button class="btn" data-action="refresh">↻ Refresh</button>
         <button class="btn btn-primary" data-action="openCreateBranchModal">+ Create Branch</button>
@@ -389,6 +389,7 @@ export function getHtmlForWebview(submodules: SubmoduleInfo[], resourceUris: Web
       <button class="btn" data-action="deselectAll">☐ Deselect All</button>
       <button class="btn" data-action="initAll">↓ Init All</button>
       <button class="btn" data-action="updateAll">⟳ Update All</button>
+      <button class="btn" data-action="syncAll">⟲ Sync Versions</button>
     </div>
 
     ${renderSubmoduleList(submodules)}

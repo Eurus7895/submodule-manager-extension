@@ -31,7 +31,7 @@ export class SubmoduleManagerPanel {
 
     const panel = vscode.window.createWebviewPanel(
       'submoduleManager',
-      'Submodule Manager',
+      'Repository Manager',
       column || vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -177,7 +177,7 @@ export class SubmoduleManagerPanel {
       // Try to notify the user about the error
       try {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Submodule Manager: ${errorMsg}`);
+        vscode.window.showErrorMessage(`Repository Manager: ${errorMsg}`);
       } catch {
         // Last resort - ignore
       }

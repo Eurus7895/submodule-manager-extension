@@ -1,6 +1,6 @@
 {
   "name": "submodule-manager",
-  "displayName": "Submodule Manager",
+  "displayName": "Repository Manager",
   "description": "A modern VS Code extension for managing Git submodules - create branches, sync versions, and manage PRs across multiple submodules",
   "version": "1.0.2",
   "publisher": "submodule-manager",
@@ -28,84 +28,84 @@
     "commands": [
       {
         "command": "submoduleManager.openPanel",
-        "title": "Open Submodule Manager",
-        "category": "Submodule Manager",
+        "title": "Open Repository Manager",
+        "category": "Repository Manager",
         "icon": "$(git-branch)"
       },
       {
         "command": "submoduleManager.refresh",
         "title": "Refresh Submodules",
-        "category": "Submodule Manager",
+        "category": "Repository Manager",
         "icon": "$(refresh)"
       },
       {
         "command": "submoduleManager.initSubmodules",
         "title": "Initialize All Submodules",
-        "category": "Submodule Manager"
+        "category": "Repository Manager"
       },
       {
         "command": "submoduleManager.updateSubmodules",
         "title": "Update All Submodules",
-        "category": "Submodule Manager"
+        "category": "Repository Manager"
       },
       {
         "command": "submoduleManager.createBranch",
         "title": "Create Branch Across Submodules",
-        "category": "Submodule Manager",
+        "category": "Repository Manager",
         "icon": "$(git-branch)"
       },
       {
         "command": "submoduleManager.syncVersions",
-        "title": "Sync Submodule Versions",
-        "category": "Submodule Manager",
+        "title": "Sync Versions",
+        "category": "Repository Manager",
         "icon": "$(sync)"
       },
       {
         "command": "submoduleManager.openSubmodule",
         "title": "Open Submodule in Explorer",
-        "category": "Submodule Manager"
+        "category": "Repository Manager"
       },
       {
         "command": "submoduleManager.checkoutBranch",
         "title": "Checkout Branch",
-        "category": "Submodule Manager"
+        "category": "Repository Manager"
       },
       {
         "command": "submoduleManager.pullChanges",
         "title": "Pull Changes",
-        "category": "Submodule Manager"
+        "category": "Repository Manager"
       },
       {
         "command": "submoduleManager.pushChanges",
         "title": "Push Changes",
-        "category": "Submodule Manager"
+        "category": "Repository Manager"
       },
       {
         "command": "submoduleManager.createPR",
         "title": "Create Pull Request",
-        "category": "Submodule Manager"
+        "category": "Repository Manager"
       },
       {
         "command": "submoduleManager.stageSubmodule",
         "title": "Stage Submodule Changes",
-        "category": "Submodule Manager"
+        "category": "Repository Manager"
       },
       {
         "command": "submoduleManager.deleteBranch",
         "title": "Delete Branch",
-        "category": "Submodule Manager",
+        "category": "Repository Manager",
         "icon": "$(trash)"
       },
       {
         "command": "submoduleManager.deleteBranchFromTree",
         "title": "Delete Branch",
-        "category": "Submodule Manager",
+        "category": "Repository Manager",
         "icon": "$(trash)"
       },
       {
         "command": "submoduleManager.deleteBranchAcrossSubmodules",
         "title": "Delete Branch Across Submodules",
-        "category": "Submodule Manager",
+        "category": "Repository Manager",
         "icon": "$(trash)"
       }
     ],
@@ -113,7 +113,7 @@
       "activitybar": [
         {
           "id": "submodule-manager",
-          "title": "Submodule Manager",
+          "title": "Repository Manager",
           "icon": "resources/icon.svg"
         }
       ]
@@ -124,20 +124,20 @@
           "id": "submoduleList",
           "name": "Submodules",
           "icon": "$(source-control)",
-          "contextualTitle": "Submodule Manager"
+          "contextualTitle": "Repository Manager"
         },
         {
           "id": "submoduleActions",
           "name": "Quick Actions",
           "icon": "$(zap)",
-          "contextualTitle": "Submodule Manager"
+          "contextualTitle": "Repository Manager"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "submoduleList",
-        "contents": "No submodules found in this workspace.\n[Initialize Submodules](command:submoduleManager.initSubmodules)\n[Open Submodule Manager](command:submoduleManager.openPanel)"
+        "contents": "No submodules found in this workspace.\n[Initialize Submodules](command:submoduleManager.initSubmodules)\n[Open Repository Manager](command:submoduleManager.openPanel)"
       }
     ],
     "menus": {
@@ -213,7 +213,7 @@
       ]
     },
     "configuration": {
-      "title": "Submodule Manager",
+      "title": "Repository Manager",
       "properties": {
         "submoduleManager.defaultBranch": {
           "type": "string",
