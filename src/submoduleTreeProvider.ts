@@ -283,7 +283,7 @@ export class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeIt
   getChildren(): ActionTreeItem[] {
     return [
       new ActionTreeItem('Open Manager Panel', 'submoduleManager.openPanel', 'dashboard',
-        'Open the Submodule Manager webview panel'),
+        'Open the Repository Manager webview panel'),
       new ActionTreeItem('Create Branch', 'submoduleManager.createBranch', 'git-branch',
         'Create a new branch across multiple submodules'),
       new ActionTreeItem('Delete Branch', 'submoduleManager.deleteBranchAcrossSubmodules', 'trash',

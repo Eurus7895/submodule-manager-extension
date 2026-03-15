@@ -30,7 +30,7 @@ export function registerRefreshCommand(
       if (SubmoduleManagerPanel.currentPanel) {
         SubmoduleManagerPanel.currentPanel.refresh();
       }
-      vscode.window.showInformationMessage('Submodules refreshed');
+      vscode.window.showInformationMessage('Repositories refreshed');
     })
   );
 }
@@ -499,14 +499,20 @@ export function registerDeleteBranchAcrossSubmodulesCommand(
         submodules = await ctx.gitOps.getSubmodules();
       }
 
+      // Include parent/main repo so Quick Actions can interact with it too
+      const parentRepo = await ctx.gitOps.getParentRepoInfo();
+      if (parentRepo) {
+        submodules = [parentRepo, ...submodules];
+      }
+
       if (submodules.length === 0) {
-        vscode.window.showWarningMessage('No submodules found');
+        vscode.window.showWarningMessage('No repositories found');
         return;
       }
 
       // Get branch name to delete
       const branchName = await vscode.window.showInputBox({
-        prompt: 'Enter the branch name to delete across submodules',
+        prompt: 'Enter the branch name to delete across repositories',
         placeHolder: 'e.g., feature/my-branch'
       });
 
@@ -514,7 +520,7 @@ export function registerDeleteBranchAcrossSubmodulesCommand(
         return;
       }
 
-      // Select submodules
+      // Select repositories
       const items = submodules.map(s => ({
         label: s.name,
         description: s.path,
@@ -523,7 +529,7 @@ export function registerDeleteBranchAcrossSubmodulesCommand(
 
       const selected = await vscode.window.showQuickPick(items, {
         canPickMany: true,
-        placeHolder: 'Select submodules to delete branch from'
+        placeHolder: 'Select repositories to delete branch from'
       });
 
       if (!selected || selected.length === 0) {

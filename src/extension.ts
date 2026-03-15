@@ -16,12 +16,12 @@ let gitOps: GitOperations;
 let prManager: PRManager;
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Submodule Manager extension is now active');
+  console.log('Repository Manager extension is now active');
 
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
   if (!workspaceRoot) {
-    vscode.window.showWarningMessage('Submodule Manager: No workspace folder open');
+    vscode.window.showWarningMessage('Repository Manager: No workspace folder open');
     return;
   }
 
@@ -69,7 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
   const hasShownWelcome = context.globalState.get('submoduleManager.welcomeShown');
   if (!hasShownWelcome) {
     vscode.window.showInformationMessage(
-      'Submodule Manager is ready! Open the panel with Ctrl+Shift+G M (Cmd+Shift+G M on Mac)',
+      'Repository Manager is ready! Open the panel with Ctrl+Shift+G M (Cmd+Shift+G M on Mac)',
       'Open Panel'
     ).then(selection => {
       if (selection === 'Open Panel') {
@@ -81,5 +81,5 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  console.log('Submodule Manager extension is now deactivated');
+  console.log('Repository Manager extension is now deactivated');
 }
